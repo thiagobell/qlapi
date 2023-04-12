@@ -1,0 +1,11 @@
+fastapi~=0.79.0
+pydantic~=1.9.0
+brother_ql
+uvicorn[standard]
+Pillow==9.2.0
+pypdfium2~=4.5.0
+python-multipart
+#testing
+pytest~=7.3.0
+httpx
+requests
