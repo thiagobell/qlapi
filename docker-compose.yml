@@ -1,0 +1,18 @@
+version: "3.9"
+services:
+  qlapi:
+    image: "qlapi:latest"
+    build:
+      dockerfile: Dockerfile
+      context: .
+    environment:
+      # when running in a docker environment, need to use the linux_kernel backend of brother_ql
+      # Otherwise, would need to start the container in privileged mode
+      - QL_PRINTER_MODEL=QL-570
+      - QL_PRINTER_DEVICE=/dev/usb/lp0
+      - QL_BACKEND=linux_kernel
+    devices:
+      # mount here the corresponding device to lp0 in the container (should match env. var above)
+      - /dev/usb/lp2:/dev/usb/lp0
+    ports:
+      - 8000:80
