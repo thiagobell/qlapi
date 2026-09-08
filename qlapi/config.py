@@ -1,16 +1,17 @@
 import os
 
-from brother_ql.backends.helpers import discover
-
-
-class NoDeviceFoundError(Exception):
-    """Raised if tried to find printers in the system but did not find any"""
 
 class InvalidSettingsError(Exception):
     pass
 
 
 class PrinterSettings:
+    """Printer configuration read from environment variables.
+
+    Construction is cheap and does no I/O: actual device discovery and
+    reachability checks happen lazily (see qlapi.printer_manager), so a
+    disconnected printer never prevents the API from starting up.
+    """
 
     def __init__(self):
         self.default_label = "62"
@@ -23,15 +24,7 @@ class PrinterSettings:
         automatically detected
         """
 
-        if self.device == "auto":
-            if self.backend != "pyusb":
-                raise InvalidSettingsError("'auto' option for QL_PRINTER_DEVICE is "
-                                           "only supported with the 'pyusb' backend")
-
-            devices = discover(self.backend)
-            if len(devices) == 0:
-                raise NoDeviceFoundError
-            device_identifier = devices[0]['instance']
-            self.device = f"usb://0x{device_identifier.idVendor:04x}:0x{device_identifier.idProduct:04x}"
-            print(f"device is {self.device}")
+        if self.device == "auto" and self.backend != "pyusb":
+            raise InvalidSettingsError("'auto' option for QL_PRINTER_DEVICE is "
+                                       "only supported with the 'pyusb' backend")
 

@@ -6,15 +6,23 @@ from fastapi import FastAPI, UploadFile, HTTPException, Depends
 
 from brother_ql.labels import ALL_LABELS, Label as QLLabel
 from qlapi.config import PrinterSettings
-from qlapi.models import LabelSpecs
+from qlapi.models import JobAccepted, JobStatusResponse, LabelSpecs, PrinterHealth
 from qlapi.pdf import pdf2im, CouldNotLoadPDFError
-from qlapi.printer import print_label
-
-# Checks configuration:
-PrinterSettings()
-
+from qlapi.printer_manager import PrinterManager, PrinterUnavailableError
 
 app = FastAPI()
+
+# Single shared settings/manager instance: construction does no I/O (see
+# qlapi.config), so a disconnected printer never prevents startup. The
+# manager owns a background thread that serializes prints through a queue,
+# so concurrent /job requests can't race on the physical printer and don't
+# block the request-handling threadpool while a print is in progress.
+_printer_settings = PrinterSettings()
+printer_manager = PrinterManager(_printer_settings)
+
+
+def get_printer_settings() -> PrinterSettings:
+    return _printer_settings
 
 
 @app.get("/")
@@ -22,8 +30,21 @@ async def root():
     return {"message": "Hello World"}
 
 
+@app.get("/health")
+async def health() -> List[PrinterHealth]:
+    """Lists reachability status for each configured printer (currently one)."""
+    status = printer_manager.status()
+    return [PrinterHealth(
+        name=status.name,
+        model=status.model,
+        backend=status.backend,
+        available=status.available,
+        error=status.error,
+    )]
+
+
 @app.get("/labels")
-async def labels(printer_settings: PrinterSettings = Depends(PrinterSettings)) -> List[LabelSpecs]:
+async def labels(printer_settings: PrinterSettings = Depends(get_printer_settings)) -> List[LabelSpecs]:
     # Filter out labels which are supported by printer
 
     __available_labels: List[QLLabel] = [
@@ -44,21 +65,21 @@ async def labels(printer_settings: PrinterSettings = Depends(PrinterSettings)) -
     return labels_dict
 
 
-@app.post("/job")
+@app.post("/job", status_code=HTTPStatus.ACCEPTED)
 def print_job(label_file: UploadFile,
               rotate: bool = False,
-              copies: int = 1,
-              printer_settings: PrinterSettings = Depends(PrinterSettings)):
+              copies: int = 1) -> JobAccepted:
     """
-    Prints the provided file. Made this function non async on purpose to try and avoid
-    race conditions on the printer.
+    Queues the provided file to be printed and returns immediately with a job id.
+    Printing itself happens serially on a background worker (see printer_manager),
+    so this never blocks on the physical printer and concurrent requests can't
+    race on it.
     Args:
-        printer_settings:
         label_file:
         rotate:
         copies:
 
-    Returns:
+    Returns: the queued job id and its initial status. Poll GET /job/{job_id} for progress.
 
     """
 
@@ -95,9 +116,17 @@ def print_job(label_file: UploadFile,
                                 detail=f"The file provided has an image extension "
                                        f"but is not a (supported) image"
                                        f"Formats accepted: {allowed_extensions}")
-    print_label(
-        printer_settings,
-        images,
-        rotate,
-        copies=copies,
-    )
+    try:
+        job = printer_manager.submit(images, rotate, copies)
+    except PrinterUnavailableError as exc:
+        raise HTTPException(status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail=str(exc))
+
+    return JobAccepted(job_id=job.id, status=job.status)
+
+
+@app.get("/job/{job_id}")
+def get_job_status(job_id: str) -> JobStatusResponse:
+    job = printer_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Unknown job id")
+    return JobStatusResponse(job_id=job.id, status=job.status, error=job.error)

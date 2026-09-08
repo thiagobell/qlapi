@@ -1,2 +1,2 @@
 #!/bin/bash
-uvicorn qlapi.app:app --reload
+uv run uvicorn qlapi.app:app --reload

@@ -4,14 +4,20 @@ This microservice makes it convenient to abstract away the hardware configuratio
 You can print a label by simply sending a POST request to `/job` with an image or pdf file.
 
 ## Getting Started
-You can start the service locally by calling the `start.sh`. You should provide configuration information as
-environment variables
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management. Install uv, then run `./start.sh`
+(or `uv run uvicorn qlapi.app:app --reload`) to start the service locally. `uv` will create the virtualenv and
+install pinned dependencies from `uv.lock` automatically. To run the tests: `uv run pytest`.
+
+You should provide configuration information as environment variables
 - "QL_BACKEND": The backend brother_ql should use, "pyusb")
 - "QL_PRINTER_MODEL": The model of your printer. e.g. QL-570
 - "QL_PRINTER_DEVICE": The device location of your printer. If using `pyusb`, you may simply set it to `auto`. Otherwise, it should be a device path such as /dev/usb/lp0 
 
 If running on a docker container, you can use the provided `docker-compose` file. There an example of the use of the 
 environment variables listed above is already included.
+
+The API starts fine even if the printer is unplugged/unreachable; `GET /health` reports its reachability and
+`POST /job` returns `503` instead of crashing when it can't be reached.
 
 ## brother_ql Backends
 The brother_ql library supports multiple backend. Here, we support the `linux_kernel` and `pyusb` backends. In a docker
@@ -21,15 +27,22 @@ by mounting exclusively the printer's corresponding device, and avoid running it
 ## API documentation
 An interactive endpoint documentation can be viewed after deploying under `localhost:8000/docs`
 
-## Remarks on concurrency
-The printer is a shared resource, and as such access to it must be serial.
-If more than one worker is used on the server, there will be no guarantee that 
-this constraint will be respected. Therefore, only one worker should be instantiated.
+## Printing is queued
+`POST /job` validates and decodes the file, then enqueues the print and returns `202` immediately with a
+`job_id`. A single background worker thread drains the queue and prints jobs one at a time, so:
+- requests never block waiting for the physical print to finish
+- concurrent requests can't race on the printer (previously a real risk: FastAPI runs sync endpoints in a
+  threadpool, so multiple in-flight `/job` calls could hit the printer at the same time)
 
-The easiest way to solve this issue is to implement a queue with a print worker.
-This was postponed since this microservice handles only print requests and, therefore,
-concurrency in request handling is not needed. 
+Poll `GET /job/{job_id}` for `queued` / `printing` / `done` / `failed` (+ `error` message) status.
+
+Note: job state is kept in memory only and is lost on restart. This is a single small local-network service,
+so that's an acceptable ceiling for now; swap in a persistent store (e.g. sqlite) if jobs need to survive restarts.
+
+## Health check
+`GET /health` returns a list with the reachability status of each configured printer (currently one),
+e.g. `available`, `model`, `backend`, and an `error` message if unreachable. It does not crash the API when
+the printer is disconnected.
 
 ## TODO
-- Handle resource locking of the printer when needed
 - use udev to give a fixed path to the printer under /dev/

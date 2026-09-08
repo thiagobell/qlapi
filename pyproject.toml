@@ -1,0 +1,29 @@
+[project]
+name = "qlweb"
+version = "1.0"
+description = "Web API for QL-570"
+requires-python = "~=3.10.0"
+dependencies = [
+    "fastapi~=0.79.0",
+    "anyio<4",  # starlette 0.19.x's TestClient uses the anyio<4 blocking-portal API
+    "pydantic~=1.9.0",
+    "brother_ql",
+    "uvicorn[standard]",
+    "Pillow==9.2.0",
+    "pypdfium2~=4.5.0",
+    "python-multipart",
+]
+
+[dependency-groups]
+dev = [
+    "pytest~=7.3.0",
+    "httpx",
+    "requests",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["qlapi"]
