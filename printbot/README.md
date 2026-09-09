@@ -1,7 +1,20 @@
 # printbot
 
 Telegram bot front-end for [`qlapi`](../qlapi/README.md). Send a photo, PDF, JPG, or PNG in a
-chat and it gets printed. Long-polls Telegram, no inbound webhook/port needed.
+chat and it gets printed, or use `/label <text>` to print text as a label. Long-polls Telegram, no
+inbound webhook/port needed.
+
+## `/label <text>`
+
+Renders the text onto 62mm continuous tape as a preview with buttons to adjust it before
+anything prints:
+
+- Multi-line messages create hard line breaks (each line stays on its own row).
+- `↕️ Switch orientation` toggles between width-fixed (default) and height-fixed layouts.
+- `➖ Smaller` / `➕ Bigger` adjust the font size.
+- `🖨 Print` sends it to the printer; `❌ Cancel` discards the preview.
+
+Nothing is sent to the printer until `🖨 Print` is tapped.
 
 ## Configuration
 
