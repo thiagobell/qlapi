@@ -6,6 +6,7 @@ import uuid
 from typing import Optional
 
 from telegram import (
+    BotCommand,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     InputMediaPhoto,
@@ -263,8 +264,16 @@ def make_handle_label_callback(config: Config, client: QlapiClient):
     return handle_label_callback
 
 
+async def _set_commands(application: Application) -> None:
+    # Populates Telegram's "/" command picker in the chat's text box. Without
+    # this, /label works fine if typed manually but is invisible in the UI.
+    await application.bot.set_my_commands(
+        [BotCommand("label", "Create a text label and print it")]
+    )
+
+
 def build_application(config: Config, client: QlapiClient) -> Application:
-    application = Application.builder().token(config.telegram.token).build()
+    application = Application.builder().token(config.telegram.token).post_init(_set_commands).build()
     # Document.ALL rather than per-mime filters: those match on the sender's
     # declared mime type, which disagrees with _extract_file's extension check
     # (a real .pdf sent as application/octet-stream would be dropped with no
