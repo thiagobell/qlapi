@@ -2,7 +2,7 @@ from typing import List
 from http import HTTPStatus
 
 from PIL import Image, UnidentifiedImageError
-from fastapi import FastAPI, UploadFile, HTTPException, Depends
+from fastapi import FastAPI, Request, UploadFile, HTTPException, Depends
 
 from brother_ql.labels import ALL_LABELS, Label as QLLabel
 from qlapi.config import PrinterSettings
@@ -10,19 +10,40 @@ from qlapi.models import JobAccepted, JobStatusResponse, LabelSpecs, PrinterHeal
 from qlapi.pdf import pdf2im, CouldNotLoadPDFError
 from qlapi.printer_manager import PrinterManager, PrinterUnavailableError
 
+# Settings construction does no I/O (see qlapi.config), so a disconnected
+# printer never prevents startup.
+_printer_settings = PrinterSettings()
+
 app = FastAPI()
 
-# Single shared settings/manager instance: construction does no I/O (see
-# qlapi.config), so a disconnected printer never prevents startup. The
-# manager owns a background thread that serializes prints through a queue,
-# so concurrent /job requests can't race on the physical printer and don't
-# block the request-handling threadpool while a print is in progress.
-_printer_settings = PrinterSettings()
-printer_manager = PrinterManager(_printer_settings)
+
+# ponytail: fastapi~=0.79.0 (pinned for pydantic v1 compat) predates the
+# `lifespan=` context-manager parameter -- passing it is silently swallowed
+# into **extra and never runs. on_event is the real startup/shutdown hook on
+# this version. Upgrade path: switch to `lifespan=` once fastapi/pydantic
+# are bumped to v2-compatible versions.
+@app.on_event("startup")
+async def _start_printer_manager():
+    # The manager owns a background thread that serializes prints through a
+    # queue, so concurrent /job requests can't race on the physical printer
+    # and don't block the request-handling threadpool while a print is in
+    # progress. Started/stopped with the app instead of at import time so it
+    # has a real (graceful) shutdown: already-queued jobs finish before the
+    # worker thread stops, instead of being killed mid-print on exit.
+    app.state.printer_manager = PrinterManager(_printer_settings)
+
+
+@app.on_event("shutdown")
+async def _stop_printer_manager():
+    app.state.printer_manager.shutdown()
 
 
 def get_printer_settings() -> PrinterSettings:
     return _printer_settings
+
+
+def get_printer_manager(request: Request) -> PrinterManager:
+    return request.app.state.printer_manager
 
 
 @app.get("/")
@@ -31,7 +52,7 @@ async def root():
 
 
 @app.get("/health")
-async def health() -> List[PrinterHealth]:
+async def health(printer_manager: PrinterManager = Depends(get_printer_manager)) -> List[PrinterHealth]:
     """Lists reachability status for each configured printer (currently one)."""
     status = printer_manager.status()
     return [PrinterHealth(
@@ -68,7 +89,8 @@ async def labels(printer_settings: PrinterSettings = Depends(get_printer_setting
 @app.post("/job", status_code=HTTPStatus.ACCEPTED)
 def print_job(label_file: UploadFile,
               rotate: bool = False,
-              copies: int = 1) -> JobAccepted:
+              copies: int = 1,
+              printer_manager: PrinterManager = Depends(get_printer_manager)) -> JobAccepted:
     """
     Queues the provided file to be printed and returns immediately with a job id.
     Printing itself happens serially on a background worker (see printer_manager),
@@ -125,7 +147,8 @@ def print_job(label_file: UploadFile,
 
 
 @app.get("/job/{job_id}")
-def get_job_status(job_id: str) -> JobStatusResponse:
+def get_job_status(job_id: str,
+                    printer_manager: PrinterManager = Depends(get_printer_manager)) -> JobStatusResponse:
     job = printer_manager.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Unknown job id")

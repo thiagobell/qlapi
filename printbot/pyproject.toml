@@ -1,0 +1,27 @@
+[project]
+name = "printbot"
+version = "1.0"
+description = "Telegram bot front-end for qlapi"
+requires-python = ">=3.11"
+dependencies = [
+    "python-telegram-bot",
+    "httpx",
+    "PyYAML",
+    "pydantic>=2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["printbot"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

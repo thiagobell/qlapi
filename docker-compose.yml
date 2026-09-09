@@ -1,10 +1,9 @@
-version: "3.9"
 services:
   qlapi:
-    image: "qlapi:latest"
     build:
+      context: ./qlapi
       dockerfile: Dockerfile
-      context: .
+    image: "ghcr.io/thiagobell/qlapi:latest"
     environment:
       # when running in a docker environment, need to use the linux_kernel backend of brother_ql
       # Otherwise, would need to start the container in privileged mode
@@ -16,3 +15,16 @@ services:
       - /dev/usb/lp2:/dev/usb/lp0
     ports:
       - 8000:80
+    restart: unless-stopped
+
+  printbot:
+    build:
+      context: ./printbot
+      dockerfile: Dockerfile
+    image: "ghcr.io/thiagobell/printbot:latest"
+    volumes:
+      # copy printbot/config.example.yaml to printbot/config.yaml and fill it in first
+      - ./printbot/config.yaml:/app/config.yaml:ro
+    depends_on:
+      - qlapi
+    restart: unless-stopped

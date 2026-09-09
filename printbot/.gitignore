@@ -1,0 +1,5 @@
+# Holds the bot token, never commit it. Copy config.example.yaml instead.
+config.yaml
+
+# Scratch space for local experiments
+.tmp/

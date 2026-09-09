@@ -1,0 +1,24 @@
+# Copy this file to config.yaml and fill it in. config.yaml is gitignored
+# because it holds your bot token.
+
+telegram:
+  # Token from @BotFather.
+  token: "123456789:AAExampleExampleExampleExampleExample"
+
+  # Allowlist: only these numeric Telegram user IDs may print.
+  # This prints to a real printer, so there is no "allow everyone" option --
+  # an empty list is rejected at startup. Send /start to @userinfobot to
+  # find your own id.
+  allowed_user_ids:
+    - 123456789
+    # - 987654321
+
+qlapi:
+  # Reachable from inside the compose network by service name.
+  base_url: "http://qlapi:80"
+  timeout_seconds: 30
+
+print:
+  # Defaults applied to every print job.
+  copies: 1
+  rotate: false

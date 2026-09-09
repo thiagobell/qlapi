@@ -21,6 +21,9 @@ from qlapi.config import PrinterSettings
 from qlapi.printer import print_label
 
 
+_SHUTDOWN = object()  # sentinel put on the queue to stop the worker thread
+
+
 class JobStatus(str, Enum):
     QUEUED = "queued"
     PRINTING = "printing"
@@ -120,9 +123,23 @@ class PrinterManager:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def shutdown(self, timeout: float = 10.0):
+        """Lets already-queued jobs finish, then stops the worker thread.
+
+        Meant to be called once, from the app's lifespan shutdown, so an
+        in-flight print isn't killed mid-feed/cut when the process exits.
+        """
+        self._queue.put(_SHUTDOWN)
+        self._worker.join(timeout=timeout)
+
     def _run(self):
         while True:
-            job, images, rotate, copies = self._queue.get()
+            item = self._queue.get()
+            if item is _SHUTDOWN:
+                self._queue.task_done()
+                break
+
+            job, images, rotate, copies = item
             job.status = JobStatus.PRINTING
             try:
                 _resolve_device(self.settings)

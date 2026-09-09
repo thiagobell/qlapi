@@ -1,48 +1,19 @@
-# qlwebapi
-A Rest API for Brother Label Printers based on the [brother_ql library](https://github.com/pklaus/brother_ql).
-This microservice makes it convenient to abstract away the hardware configuration of your Brother printer.
-You can print a label by simply sending a POST request to `/job` with an image or pdf file.
+# qlapi monorepo
 
-## Getting Started
-This project uses [uv](https://docs.astral.sh/uv/) for dependency management. Install uv, then run `./start.sh`
-(or `uv run uvicorn qlapi.app:app --reload`) to start the service locally. `uv` will create the virtualenv and
-install pinned dependencies from `uv.lock` automatically. To run the tests: `uv run pytest`.
+Two small, independently deployed services:
 
-You should provide configuration information as environment variables
-- "QL_BACKEND": The backend brother_ql should use, "pyusb")
-- "QL_PRINTER_MODEL": The model of your printer. e.g. QL-570
-- "QL_PRINTER_DEVICE": The device location of your printer. If using `pyusb`, you may simply set it to `auto`. Otherwise, it should be a device path such as /dev/usb/lp0 
+- [`qlapi/`](qlapi/README.md) — REST API for Brother QL label printers.
+- [`printbot/`](printbot/README.md) — Telegram bot front-end for `qlapi`: send a photo or PDF in a chat and it gets printed.
 
-If running on a docker container, you can use the provided `docker-compose` file. There an example of the use of the 
-environment variables listed above is already included.
+Each service has its own `pyproject.toml`, `uv.lock`, and `Dockerfile`, and is built and pushed
+independently — see `.github/workflows/qlapi-ci.yml` and `.github/workflows/printbot-ci.yml`.
 
-The API starts fine even if the printer is unplugged/unreachable; `GET /health` reports its reachability and
-`POST /job` returns `503` instead of crashing when it can't be reached.
+## Running both locally
 
-## brother_ql Backends
-The brother_ql library supports multiple backend. Here, we support the `linux_kernel` and `pyusb` backends. In a docker
-environment, it seems like using the `linux_kernel` backend is the better choice. You can start the container
-by mounting exclusively the printer's corresponding device, and avoid running it in privileged mode.
+```bash
+cp printbot/config.example.yaml printbot/config.yaml   # then fill in your bot token + allowed users
+docker compose up --build
+```
 
-## API documentation
-An interactive endpoint documentation can be viewed after deploying under `localhost:8000/docs`
-
-## Printing is queued
-`POST /job` validates and decodes the file, then enqueues the print and returns `202` immediately with a
-`job_id`. A single background worker thread drains the queue and prints jobs one at a time, so:
-- requests never block waiting for the physical print to finish
-- concurrent requests can't race on the printer (previously a real risk: FastAPI runs sync endpoints in a
-  threadpool, so multiple in-flight `/job` calls could hit the printer at the same time)
-
-Poll `GET /job/{job_id}` for `queued` / `printing` / `done` / `failed` (+ `error` message) status.
-
-Note: job state is kept in memory only and is lost on restart. This is a single small local-network service,
-so that's an acceptable ceiling for now; swap in a persistent store (e.g. sqlite) if jobs need to survive restarts.
-
-## Health check
-`GET /health` returns a list with the reachability status of each configured printer (currently one),
-e.g. `available`, `model`, `backend`, and an `error` message if unreachable. It does not crash the API when
-the printer is disconnected.
-
-## TODO
-- use udev to give a fixed path to the printer under /dev/
+`printbot` reaches the API over the compose network at `http://qlapi:80`, so only `qlapi`'s port is
+published to the host. See each service's README for its configuration.
