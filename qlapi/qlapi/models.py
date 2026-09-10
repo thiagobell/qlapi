@@ -1,4 +1,5 @@
-from typing import Optional, Tuple
+from datetime import datetime
+from typing import Any, Optional, Tuple
 
 from brother_ql.labels import FormFactor
 from pydantic import BaseModel
@@ -48,3 +49,25 @@ class JobStatusResponse(BaseModel):
     status: str
     error: Optional[str]
     "reason the job failed, if any"
+
+
+class TemplateMeta(BaseModel):
+    """Metadata for a stored label-editor template (no canvas payload)."""
+    id: str
+    name: str
+    label_identifier: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class Template(TemplateMeta):
+    """A full stored template, including the Fabric.js canvas JSON."""
+    canvas: Any
+
+
+class TemplateSave(BaseModel):
+    """Request body for creating/updating a template."""
+    name: str
+    label_identifier: str
+    canvas: Any
+

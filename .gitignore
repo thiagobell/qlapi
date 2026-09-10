@@ -129,3 +129,9 @@ dmypy.json
 .pyre/
 .idea
 
+# Local scratch space for agent/dev temp files
+tmp/
+
+# Saved label-editor templates (local user data)
+qlapi/qlapi/data/
+
