@@ -27,3 +27,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["qlapi"]
+
+# The editor page is served off disk by app.py, so it has to survive a real
+# wheel build -- without this, StaticFiles raises at import time on a
+# non-editable install.
+[tool.setuptools.package-data]
+qlapi = ["static/*"]

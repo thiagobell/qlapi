@@ -1,20 +1,28 @@
+from datetime import datetime, timezone
 from typing import List
 from http import HTTPStatus
+from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
 from fastapi import FastAPI, Request, UploadFile, HTTPException, Depends
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from brother_ql.labels import ALL_LABELS, Label as QLLabel
 from qlapi.config import PrinterSettings
-from qlapi.models import JobAccepted, JobStatusResponse, LabelSpecs, PrinterHealth
+from qlapi.models import JobAccepted, JobStatusResponse, LabelSpecs, PrinterHealth, Template, TemplateMeta, TemplateSave
 from qlapi.pdf import pdf2im, CouldNotLoadPDFError
 from qlapi.printer_manager import PrinterManager, PrinterUnavailableError
+from qlapi import templates as templates_store
 
 # Settings construction does no I/O (see qlapi.config), so a disconnected
 # printer never prevents startup.
 _printer_settings = PrinterSettings()
 
 app = FastAPI()
+
+_STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
 # ponytail: fastapi~=0.79.0 (pinned for pydantic v1 compat) predates the
@@ -49,6 +57,12 @@ def get_printer_manager(request: Request) -> PrinterManager:
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
+
+
+@app.get("/editor")
+async def editor():
+    """Serves the in-browser label editor, a single static page."""
+    return FileResponse(_STATIC_DIR / "editor.html")
 
 
 @app.get("/health")
@@ -153,3 +167,53 @@ def get_job_status(job_id: str,
     if job is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Unknown job id")
     return JobStatusResponse(job_id=job.id, status=job.status, error=job.error)
+
+
+@app.get("/templates")
+def list_templates() -> List[TemplateMeta]:
+    return [TemplateMeta(**meta) for meta in templates_store.list_templates()]
+
+
+@app.get("/templates/{template_id}")
+def get_template(template_id: str) -> Template:
+    try:
+        return Template(**templates_store.get_template(template_id))
+    except FileNotFoundError:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Unknown template id")
+
+
+@app.post("/templates", status_code=HTTPStatus.OK)
+def create_template(body: TemplateSave) -> Template:
+    template_id = templates_store.new_id()
+    now = datetime.now(timezone.utc).isoformat()
+    data = {
+        "name": body.name,
+        "label_identifier": body.label_identifier,
+        "created_at": now,
+        "updated_at": now,
+        "canvas": body.canvas,
+    }
+    return Template(**templates_store.save_template(template_id, data))
+
+
+@app.post("/templates/{template_id}")
+def update_template(template_id: str, body: TemplateSave) -> Template:
+    try:
+        existing = templates_store.get_template(template_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Unknown template id")
+    data = {
+        "name": body.name,
+        "label_identifier": body.label_identifier,
+        "created_at": existing["created_at"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "canvas": body.canvas,
+    }
+    return Template(**templates_store.save_template(template_id, data))
+
+
+@app.delete("/templates/{template_id}", status_code=HTTPStatus.NO_CONTENT)
+def delete_template(template_id: str):
+    if not templates_store.delete_template(template_id):
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Unknown template id")
+
