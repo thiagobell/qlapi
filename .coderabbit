@@ -1,0 +1,7 @@
+reviews:
+  auto_review:
+    enabled: true          # turn automatic reviews on/off globally
+    drafts: false           # true = also review draft PRs (default: skipped)
+    base_branches: ["main"]       # target specific branches, e.g. ["main", "develop"]; defaults to just the default branch
+    labels: []               # only review PRs with these labels; prefix with "!" to exclude a label
+    ignore_title_keywords: []  # skip PRs whose title contains these words
