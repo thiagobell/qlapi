@@ -12,6 +12,7 @@ You should provide configuration information as environment variables
 - "QL_BACKEND": The backend brother_ql should use, "pyusb")
 - "QL_PRINTER_MODEL": The model of your printer. e.g. QL-570
 - "QL_PRINTER_DEVICE": The device location of your printer. If using `pyusb`, you may simply set it to `auto`. Otherwise, it should be a device path such as /dev/usb/lp0 
+- "QL_TEMPLATES_DIR": Directory where label templates are stored (JSON files). Defaults to `qlapi/data/templates` inside the package. In Docker, set it to a mounted volume path (e.g. `/data/templates`) so templates persist across container recreation.
 
 If running on a docker container, you can use the provided `docker-compose` file. There an example of the use of the 
 environment variables listed above is already included.
