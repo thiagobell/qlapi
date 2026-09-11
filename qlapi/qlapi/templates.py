@@ -1,11 +1,16 @@
 """Flat-file JSON storage for label-editor templates."""
 
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-DATA_DIR = Path(__file__).parent / "data" / "templates"
+DATA_DIR = Path(
+    os.getenv("QL_TEMPLATES_DIR", Path(__file__).parent / "data" / "templates")
+)
+"""Directory where templates are stored. Set QL_TEMPLATES_DIR to point it at,
+e.g., a Docker volume so templates survive container recreation."""
 
 
 def _now() -> str:
