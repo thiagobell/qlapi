@@ -10,6 +10,12 @@ services:
       - QL_PRINTER_MODEL=QL-570
       - QL_PRINTER_DEVICE=/dev/usb/lp0
       - QL_BACKEND=linux_kernel
+      # store label templates outside the container image so they persist
+      # across container recreation (see volumes below)
+      - QL_TEMPLATES_DIR=/data/templates
+    volumes:
+      # mount a host directory (or named volume) to persist label templates
+      - ./qlapi/templates:/data/templates
     devices:
       # mount here the corresponding device to lp0 in the container (should match env. var above)
       - /dev/usb/lp2:/dev/usb/lp0
