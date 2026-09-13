@@ -76,9 +76,10 @@
   .view { flex: 1 1 auto; min-height: 0; display: none; flex-direction: column; }
   .view.on { display: flex; }
 
-  #viewEditor iframe {
+  main iframe {
     flex: 1 1 auto;
     width: 100%;
+    height: 100%;
     border: 0;
     background: var(--bg);
   }
@@ -130,146 +131,10 @@
 </head>
 <body>
 
-<header>
-  <div class="brand"><b>QLApi</b><span>Brother QL label printing</span></div>
-  <nav>
-    <button class="tab on" id="tabEditor">Label editor</button>
-    <button class="tab" id="tabFile">Print a file</button>
-    <a class="docslink" href="/docs">API docs</a>
-  </nav>
-  <div class="health"><i class="dot" id="hdot"></i><span id="htext">checking printer</span></div>
-</header>
-
 <main>
-  <section class="view on" id="viewEditor">
-    <iframe id="editorFrame" src="/editor" title="Label editor"></iframe>
-  </section>
-
-  <section class="view" id="viewFile">
-    <h1>Print an existing file</h1>
-    <p>Already have a label? Upload a PNG, JPG or PDF and print it directly.
-       Turn on rotation to print a landscape image across the tape.</p>
-    <form class="printfile" id="pfForm">
-      <label class="field">File (png, jpg, jpeg, pdf)
-        <input type="file" id="pfFile" accept=".png,.jpg,.jpeg,.pdf" required>
-      </label>
-      <div class="row">
-        <label class="field">Copies
-          <input type="number" id="pfCopies" min="1" max="50" value="1">
-        </label>
-        <label class="check"><input type="checkbox" id="pfRotate"> Rotate 90&deg;</label>
-        <button type="submit" class="print" id="pfBtn">Print</button>
-      </div>
-      <div id="pfStatus" aria-live="polite"></div>
-    </form>
-  </section>
+  <iframe id="editorFrame" src="/editor" title="Label editor — Print an existing file"></iframe>
 </main>
 
-<script>
-(function () {
-  "use strict";
-  var $ = function (id) { return document.getElementById(id); };
-
-  // ------------------------------------------------------------- tabs
-  // The editor iframe stays mounted the whole time, so switching to the file
-  // view and back never reloads it and the label being drawn is kept.
-  function show(which) {
-    var edit = which === "editor";
-    $("viewEditor").classList.toggle("on", true);
-    $("viewFile").classList.toggle("on", false);
-    $("tabEditor").classList.toggle("on", edit);
-    $("tabFile").classList.toggle("on", !edit);
-    var frame = $("editorFrame");
-    try {
-      var target = edit ? "designMode" : "fileMode";
-      var button = frame.contentDocument && frame.contentDocument.getElementById(target);
-      if (button) button.click();
-    } catch (err) {}
-  }
-  $("tabEditor").onclick = function () { show("editor"); };
-  $("tabFile").onclick = function () { show("file"); };
-  $("editorFrame").onload = function () { if (location.hash === "#file") show("file"); };
-
-  if (location.hash === "#file") show("file");
-
-  // ------------------------------------------------------------- health
-  async function checkHealth() {
-    var dot = $("hdot"), txt = $("htext");
-    try {
-      var res = await fetch("/health");
-      var list = await res.json();
-      var p = list[0];
-      if (!p) throw new Error("no printer");
-      dot.className = "dot " + (p.available ? "up" : "down");
-      txt.textContent = p.available ? p.model + " ready" : (p.error || "printer unavailable");
-    } catch (err) {
-      dot.className = "dot down";
-      txt.textContent = "printer unreachable";
-    }
-  }
-
-  // -------------------------------------------------------- print a file
-  function pfSay(cls, text) {
-    $("pfStatus").innerHTML = '<span class="' + cls + '">' + text + "</span>";
-  }
-
-  async function detail(res) {
-    try {
-      var body = await res.json();
-      if (body && body.detail) return typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
-    } catch (err) { /* non-JSON body */ }
-    return "Server responded " + res.status + ".";
-  }
-
-  $("pfForm").onsubmit = async function (e) {
-    e.preventDefault();
-    var btn = $("pfBtn");
-    var file = $("pfFile").files[0];
-    if (!file) { pfSay("bad", "Pick a file first."); return; }
-    if (!/\.(png|jpe?g|pdf)$/i.test(file.name)) {
-      pfSay("bad", "Only png, jpg, jpeg and pdf files can be printed.");
-      return;
-    }
-
-    var copies = Math.max(1, parseInt($("pfCopies").value, 10) || 1);
-    btn.disabled = true;
-    try {
-      var fd = new FormData();
-      fd.append("label_file", file, file.name);
-      var q = "?rotate=" + ($("pfRotate").checked ? "true" : "false") + "&copies=" + copies;
-      pfSay("work", "Sending to printer&hellip;");
-
-      var res = await fetch("/job" + q, { method: "POST", body: fd });
-      if (!res.ok) { pfSay("bad", await detail(res)); return; }
-      var job = await res.json();
-      pfSay("work", "Queued as job " + job.job_id + "&hellip;");
-
-      // Poll until the background worker reaches a terminal state.
-      for (var i = 0; i < 150; i++) {
-        await new Promise(function (r) { setTimeout(r, 700); });
-        var sres = await fetch("/job/" + encodeURIComponent(job.job_id));
-        if (!sres.ok) { pfSay("bad", await detail(sres)); return; }
-        var s = await sres.json();
-        if (s.status === "done") {
-          pfSay("good", "Printed " + copies + " cop" + (copies === 1 ? "y" : "ies") + ".");
-          return;
-        }
-        if (s.status === "failed") {
-          pfSay("bad", s.error || "The print job failed.");
-          return;
-        }
-      }
-      pfSay("bad", "Still not finished. Job id " + job.job_id + ".");
-    } catch (err) {
-      pfSay("bad", err && err.message ? err.message : "Could not reach the server.");
-    } finally {
-      btn.disabled = false;
-      checkHealth();
-    }
-  };
-
-  checkHealth();
-})();
-</script>
+<script></script>
 </body>
 </html>
