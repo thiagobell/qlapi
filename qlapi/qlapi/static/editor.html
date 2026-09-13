@@ -25,6 +25,10 @@
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+  /* Author display rules (flex etc.) would otherwise beat the UA's [hidden]
+     rule and leave supposedly hidden controls on screen. */
+  [hidden] { display: none !important; }
+
   html, body {
     height: 100%;
     margin: 0;
@@ -385,15 +389,20 @@
   }
 
   .props {
-    display: none;
+    /* Always laid out, never display-toggled: it switches between an active
+       and an idle look instead, so selecting an object does not reflow the
+       page and shift the label on screen. */
+    display: flex;
     align-items: center;
     gap: 8px;
+    min-height: 53px;
     padding: 8px calc(12px + var(--safe-r)) 8px calc(12px + var(--safe-l));
     border-bottom: 1px solid var(--line);
     background: var(--chrome-2);
     overflow-x: auto;
   }
-  .props.on { display: flex; }
+  .props.idle { opacity: .45; }
+  .props.idle > :not(.cap) { display: none; }
   .props .cap {
     font-size: 10px;
     letter-spacing: 0.08em;
@@ -418,6 +427,7 @@
   }
   .tools::-webkit-scrollbar { display: none; }
   .tools button { flex: none; white-space: nowrap; }
+  .tools .sep { width: 1px; align-self: stretch; background: var(--line); flex: none; margin: 2px 3px; }
   .tools .grow { flex: 1 1 auto; min-width: 0; }
   .tools .danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
 
@@ -614,8 +624,8 @@
 </main>
 
 <footer>
-  <div class="props" id="props">
-    <span class="cap" id="propsCap">Text</span>
+  <div class="props idle" id="props">
+    <span class="cap" id="propsCap">Nothing selected</span>
     <input class="txt" type="number" id="fsize" min="6" max="400" step="2" value="40" aria-label="Font size">
     <button class="txt" id="boldBtn" style="font-weight:700">B</button>
     <span class="sep txt"></span>
@@ -631,6 +641,11 @@
     <button id="addText">Add text</button>
     <button id="addImage">Add image</button>
     <button id="addIcon">Add icon</button>
+    <span class="sep"></span>
+    <button id="addTextSlot" title="Add a fillable text placeholder">Text slot</button>
+    <button id="addImageSlot" title="Add a fillable image placeholder">Image slot</button>
+    <button id="addBarcodeSlot" title="Add a fillable barcode placeholder">Barcode slot</button>
+    <span class="sep"></span>
     <button id="tplBtn">Templates</button>
     <button id="fillBtn" disabled title="Fill this label's placeholders">Fill</button>
     <button id="fwd" disabled title="Move the selected object one step towards the front">
@@ -691,10 +706,17 @@
           <option value="QR">QR code</option>
         </select>
       </label>
+      <label class="field" id="fitWrap" hidden>Image fit
+        <select id="slotFit">
+          <option value="resize">Resize &ndash; fit inside</option>
+          <option value="clip">Clip &ndash; cover and crop</option>
+          <option value="stretch">Stretch &ndash; distort to fill</option>
+        </select>
+      </label>
       <label class="field">Default value
         <input type="text" id="slotDefault" placeholder="used when the field is left empty" autocomplete="off">
       </label>
-      <div class="hint">The slot keeps this object's position and size. Filling replaces the artwork inside that box.</div>
+      <div class="hint">The slot keeps this object's position and size. Filling replaces the artwork inside that box; image slots remember how the picture should meet the box.</div>
     </div>
     <div class="row"><button class="print grow" id="slotApply">Apply</button></div>
   </div>
@@ -753,7 +775,7 @@
   // ---------------------------------------------------------------- setup
   var $ = function (id) { return document.getElementById(id); };
   var uploadedFile = null, fileMode = false;
-  var editingControlIds = ["labelSel", "lenInp", "addText", "addImage", "addIcon", "tplBtn", "fillBtn", "fwd", "back", "del"];
+  var editingControlIds = ["labelSel", "lenInp", "addText", "addImage", "addIcon", "addTextSlot", "addImageSlot", "addBarcodeSlot", "tplBtn", "fillBtn", "fwd", "back", "del"];
 
   function setFileMode(on) {
     fileMode = on;
@@ -1014,33 +1036,58 @@
     lastTap = now; lastTapX = p.x; lastTapY = p.y;
   });
 
-  $("filePick").onchange = function (e) {
+  $("filePick").onchange = async function (e) {
     var file = e.target.files && e.target.files[0];
     e.target.value = "";
     if (!file) return;
-    var url = URL.createObjectURL(file);
-    fabric.FabricImage.fromURL(url).then(function (img) {
-      URL.revokeObjectURL(url);
-      img.set(OBJ);
-      img.set("fill", null);
+    try {
+      var el = await imageEl(file);
+      var img = new fabric.FabricImage(el, Object.assign({}, OBJ, { fill: null }));
       var k = Math.min(canvas.getWidth() / img.width, canvas.getHeight() / img.height, 1) * 0.8;
       img.scale(k);
       place(img);
-    }).catch(function () {
-      URL.revokeObjectURL(url);
-      say("bad", "error", "Could not read that image.");
-    });
+    } catch (err) {
+      say("bad", "error", err && err.message ? err.message : "Could not read that image.");
+    }
   };
   $("addImage").onclick = function () { $("filePick").click(); };
 
   var sheet = $("sheet");
   $("addIcon").onclick = function () { sheet.classList.add("on"); };
 
+  // Enter in a sheet's text fields submits the sheet through its primary
+  // button -- name the slot, hit Enter, done. Textareas keep Enter for a new
+  // line and need Ctrl/Cmd+Enter instead.
+  var SHEET_PRIMARY = { slotSheet: "slotApply", tplSheet: "tplSave", fillSheet: "fillPreview" };
+
   // Every sheet closes the same two ways: its Close button, or the backdrop.
+  // The backdrop only counts when the whole gesture (down AND up) lands on
+  // it -- selecting text in a field and dragging past the edge must not
+  // close the sheet by accident.
   Array.prototype.forEach.call(document.querySelectorAll(".sheet"), function (s) {
-    s.onclick = function (e) { if (e.target === s) s.classList.remove("on"); };
+    var downOn = false, upOn = false;
+    s.addEventListener("pointerdown", function (e) { downOn = e.target === s; });
+    s.addEventListener("pointerup", function (e) { upOn = e.target === s; });
+    s.onclick = function (e) { if (e.target === s && downOn && upOn) s.classList.remove("on"); };
     var x = s.querySelector("[data-close]");
     if (x) x.onclick = function () { s.classList.remove("on"); };
+    s.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || !SHEET_PRIMARY[s.id]) return;
+      var t = e.target;
+      if (!/^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+      if (t.tagName === "TEXTAREA" && !e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      $(SHEET_PRIMARY[s.id]).click();
+    });
+  });
+
+  // Escape closes the topmost open sheet.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    var open = Array.prototype.filter.call(document.querySelectorAll(".sheet"), function (s) {
+      return s.classList.contains("on");
+    });
+    if (open.length) { e.preventDefault(); open[open.length - 1].classList.remove("on"); }
   });
 
   ICONS.forEach(function (ic) {
@@ -1095,10 +1142,12 @@
     var t = activeText();
     // One bar for everything: the text controls hide for images and icons, the
     // placeholder controls are always there as long as something is selected.
-    props.classList.toggle("on", !!o);
+    // The bar itself never disappears -- it idles -- so the layout is stable.
+    props.classList.toggle("idle", !o);
     props.classList.toggle("notext", !t);
     var single = o && o.type !== "activeselection";
-    $("propsCap").textContent = o && o.placeholder ? "Slot" : (t ? "Text" : "Object");
+    $("propsCap").textContent = !o ? "Nothing selected"
+      : o.placeholder ? "Slot" : (t ? "Text" : "Object");
     $("slotBtn").hidden = !single;
     $("slotBtn").textContent = single && o.placeholder ? "Edit placeholder" : "Make placeholder";
     $("unslotBtn").hidden = !(single && o.placeholder);
@@ -1132,11 +1181,14 @@
   canvas.on("selection:cleared", syncUI);
 
   // ---------------------------------------------------------- placeholders
-  // A placeholder is an ordinary Fabric object carrying five extra props. They
+  // A placeholder is an ordinary Fabric object carrying extra props. They
   // are not part of Fabric's own schema, so toObject() has to be handed the
   // list explicitly -- see templateJSON(). On the way back in, Fabric copies
   // unknown keys straight onto the revived object, so the round trip holds.
-  var SLOT_PROPS = ["placeholder", "slotName", "slotType", "slotFormat", "slotDefault"];
+  // slotFit is how an uploaded image should meet the slot's box (image slots
+  // only). slotDummy is runtime-only and never serialised: it marks artwork
+  // that is still the placeholder's own sample.
+  var SLOT_PROPS = ["placeholder", "slotName", "slotType", "slotFormat", "slotDefault", "slotFit"];
 
   function slots() {
     return canvas.getObjects().filter(function (o) { return o.placeholder; });
@@ -1169,34 +1221,57 @@
     ctx.restore();
   });
 
-  var slotSheet = $("slotSheet"), slotType = $("slotType"), fmtWrap = $("fmtWrap");
-  function syncFmt() { fmtWrap.hidden = slotType.value !== "barcode"; }
-  slotType.onchange = syncFmt;
+  var slotSheet = $("slotSheet"), slotType = $("slotType"), fmtWrap = $("fmtWrap"), fitWrap = $("fitWrap");
+  function syncSlotFields() {
+    fmtWrap.hidden = slotType.value !== "barcode";
+    fitWrap.hidden = slotType.value !== "image";
+  }
+  slotType.onchange = syncSlotFields;
 
-  $("slotBtn").onclick = function () {
+  function openSlotModal() {
     var o = canvas.getActiveObject();
     if (!o) return;
     var isText = o.type === "textbox";
     $("slotName").value = o.slotName || (isText ? "text" : "art");
     slotType.value = o.slotType || (isText ? "text" : "image");
     $("slotFormat").value = o.slotFormat || "CODE128";
-    $("slotDefault").value = o.slotDefault || (isText ? o.text : "");
-    syncFmt();
+    $("slotFit").value = o.slotFit || "resize";
+    // A dummy object carries no user data yet, so leave the default empty.
+    $("slotDefault").value = o.slotDummy ? "" : (o.slotDefault || (isText ? o.text : ""));
+    syncSlotFields();
     slotSheet.classList.add("on");
-  };
+  }
 
-  $("slotApply").onclick = function () {
+  $("slotBtn").onclick = openSlotModal;
+
+  $("slotApply").onclick = async function () {
     var o = canvas.getActiveObject();
     if (!o) return;
     var name = ($("slotName").value || "").trim();
     if (!name) { say("bad", "name", "Give the slot a name first."); return; }
-    o.set({
+    var props = {
       placeholder: true,
       slotName: name,
       slotType: slotType.value,
       slotFormat: slotType.value === "barcode" ? $("slotFormat").value : "",
+      slotFit: slotType.value === "image" ? $("slotFit").value : "",
       slotDefault: $("slotDefault").value
-    });
+    };
+    if (o.slotDummy && slotType.value === "barcode") {
+      // Render the sample before committing, so a bad format cannot leave a
+      // half-updated slot behind.
+      try {
+        var el = await sampleBarcode(props.slotFormat, props.slotDefault);
+        o.set(props);
+        var img = swap(o, el);
+        canvas.setActiveObject(img);
+      } catch (err) { say("bad", "error", err.message, false); return; }
+    } else {
+      var prevName = o.slotName;
+      o.set(props);
+      // A dummy text slot shows its own name as artwork -- rename it along.
+      if (o.slotDummy && o.type === "textbox" && o.text === prevName) o.set("text", name);
+    }
     slotSheet.classList.remove("on");
     canvas.requestRenderAll();
     syncUI();
@@ -1206,11 +1281,59 @@
   $("unslotBtn").onclick = function () {
     var o = canvas.getActiveObject();
     if (!o) return;
-    o.set({ placeholder: false, slotName: "", slotType: "", slotFormat: "", slotDefault: "" });
+    o.set({ placeholder: false, slotName: "", slotType: "", slotFormat: "", slotDefault: "", slotFit: "", slotDummy: false });
     canvas.requestRenderAll();
     syncUI();
     syncFill();
   };
+
+  // ------------------------------------------------------------ slot tools
+  // Template editing without any source artwork: each slot kind starts as a
+  // dummy object with its own styling -- a text box named after the slot, a
+  // hatched box for images, a real sample barcode for barcodes.
+  function uniqueSlotName(base) {
+    var taken = {};
+    slots().forEach(function (o) { taken[o.slotName] = true; });
+    if (!taken[base]) return base;
+    var i = 2;
+    while (taken[base + i]) i++;
+    return base + i;
+  }
+
+  function dummyBox(w, h) {
+    return new fabric.Rect(Object.assign({}, OBJ, {
+      width: w, height: h,
+      fill: "rgba(0,0,0,.06)",
+      stroke: "#000000",
+      strokeWidth: 2,
+      strokeDashArray: [8, 6],
+      strokeUniform: true
+    }));
+  }
+
+  function addSlot(kind) {
+    var name = uniqueSlotName(kind);
+    var o;
+    if (kind === "text") {
+      o = newTextbox();
+      o.set("text", name);
+    } else {
+      o = dummyBox(Math.round(canvas.getWidth() * (kind === "barcode" ? 0.7 : 0.5)),
+                   Math.round(canvas.getHeight() * (kind === "barcode" ? 0.35 : 0.5)));
+    }
+    o.set({
+      placeholder: true, slotName: name, slotType: kind,
+      slotFormat: kind === "barcode" ? "CODE128" : "",
+      slotFit: kind === "image" ? "resize" : "",
+      slotDefault: "", slotDummy: true
+    });
+    place(o);
+    openSlotModal();
+  }
+
+  $("addTextSlot").onclick = function () { addSlot("text"); };
+  $("addImageSlot").onclick = function () { addSlot("image"); };
+  $("addBarcodeSlot").onclick = function () { addSlot("barcode"); };
 
   // ------------------------------------------------------------- templates
   var tplSheet = $("tplSheet"), tplList = $("tplList");
@@ -1362,11 +1485,21 @@
 
   $("fillBtn").onclick = function () { buildFill(); fillSheet.classList.add("on"); };
 
+  // Rasterise through a canvas instead of handing Fabric the blob-backed
+  // element: Fabric serialises an image's src as-is, and a blob URL dies with
+  // the session -- a template saved with one would never load again. A canvas
+  // round-trip keeps the pixels and makes Fabric store a durable data URL.
   function imageEl(file) {
     return new Promise(function (ok, fail) {
       var url = URL.createObjectURL(file);
       var im = new Image();
-      im.onload = function () { URL.revokeObjectURL(url); ok(im); };
+      im.onload = function () {
+        URL.revokeObjectURL(url);
+        var c = document.createElement("canvas");
+        c.width = im.naturalWidth; c.height = im.naturalHeight;
+        c.getContext("2d").drawImage(im, 0, 0);
+        ok(c);
+      };
       im.onerror = function () { URL.revokeObjectURL(url); fail(new Error("Could not read " + file.name + ".")); };
       im.src = url;
     });
@@ -1403,22 +1536,61 @@
     return Promise.resolve(c);
   }
 
+  // Sample data so a fresh barcode slot can show real artwork of its own.
+  var SAMPLE_DATA = {
+    CODE128: "slot-1234", CODE39: "SLOT-123", EAN13: "4006381333931",
+    EAN8: "73513537", UPC: "036000291452", ITF14: "1234567890123",
+    QR: "https://example.com/label"
+  };
+
+  // Prefer the slot's default value, fall back to known-good sample data.
+  async function sampleBarcode(format, preferred) {
+    var data = (preferred || "").trim();
+    if (data) {
+      try { return await barcodeEl(format, data); } catch (err) { /* try sample data */ }
+    }
+    return barcodeEl(format, SAMPLE_DATA[format] || "123456789");
+  }
+
   // The new artwork inherits the slot's box and its slot props, so the same
-  // label can be filled again without reloading the template.
+  // label can be filled again without reloading the template. How the image
+  // meets the box is the slot's fit setting:
+  //   resize  -- whole image inside the box, margins stay white
+  //   clip    -- cover the box, crop what sticks out
+  //   stretch -- distort to fill the box exactly
+  // Barcodes always resize: cropping or distorting one ruins it.
   function swap(o, el) {
     var r = o.getBoundingRect();
     var idx = canvas.getObjects().indexOf(o);
     var img = new fabric.FabricImage(el, Object.assign({}, OBJ, {
       fill: null,
-      left: r.left, top: r.top, originX: "left", originY: "top",
       placeholder: true,
       slotName: o.slotName, slotType: o.slotType,
-      slotFormat: o.slotFormat, slotDefault: o.slotDefault
+      slotFormat: o.slotFormat, slotDefault: o.slotDefault,
+      slotFit: o.slotFit, slotDummy: o.slotDummy
     }));
-    img.scale(Math.min(r.width / img.width, r.height / img.height));
+    var fit = o.slotType === "barcode" ? "resize" : (o.slotFit || "resize");
+    var kx = r.width / img.width, ky = r.height / img.height;
+    if (fit === "stretch") {
+      img.set({ left: r.left, top: r.top, originX: "left", originY: "top", scaleX: kx, scaleY: ky });
+    } else if (fit === "clip") {
+      var s = Math.max(kx, ky);
+      img.set({ left: r.left + r.width / 2, top: r.top + r.height / 2, originX: "center", originY: "center" });
+      img.scale(s);
+      // The clip rectangle lives in the image's own coordinate space, so it
+      // has to be unscaled by the same factor the image was scaled up by.
+      img.clipPath = new fabric.Rect({
+        width: r.width / s, height: r.height / s,
+        originX: "center", originY: "center"
+      });
+    } else {
+      img.set({ left: r.left + r.width / 2, top: r.top + r.height / 2, originX: "center", originY: "center" });
+      img.scale(Math.min(kx, ky));
+    }
     canvas.remove(o);
     canvas.add(img);
     canvas.moveObjectTo(img, idx);
+    return img;
   }
 
   // Works on the label in the editor, never on the stored template -- that one
@@ -1432,13 +1604,13 @@
     for (var i = 0; i < list.length; i++) {
       var o = list[i];
       if (o.slotType === "text") {
-        o.set("text", vals[o.slotName] || o.slotDefault || "");
+        o.set({ text: vals[o.slotName] || o.slotDefault || "", slotDummy: false });
       } else if (o.slotType === "image") {
         var f = fillFiles[o.slotName];
-        if (f) swap(o, await imageEl(f));
+        if (f) { var img = swap(o, await imageEl(f)); img.set("slotDummy", false); }
       } else {
         var data = (vals[o.slotName] || o.slotDefault || "").trim();
-        if (data) swap(o, await barcodeEl(o.slotFormat, data));
+        if (data) { var bc = swap(o, await barcodeEl(o.slotFormat, data)); bc.set("slotDummy", false); }
       }
     }
     canvas.discardActiveObject();
