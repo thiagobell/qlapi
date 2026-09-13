@@ -68,3 +68,19 @@ def test_unknown_job_id_returns_404(client):
     req = client.get("/job/does-not-exist")
 
     assert req.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_root_serves_landing_page(client):
+    req = client.get("/")
+
+    assert req.status_code == HTTPStatus.OK
+    assert "text/html" in req.headers["content-type"]
+    assert "Print an existing file" in req.text
+    assert 'src="/editor"' in req.text
+
+
+def test_editor_is_still_served(client):
+    req = client.get("/editor")
+
+    assert req.status_code == HTTPStatus.OK
+    assert "text/html" in req.headers["content-type"]

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0e10">
+<title>QLApi &mdash; Brother QL label printing</title>
+<style>
+  :root {
+    --bg: #0d0e10;
+    --chrome: #17191c;
+    --chrome-2: #202429;
+    --line: #2c3137;
+    --ink: #e8eaed;
+    --dim: #8d949c;
+    --accent: #ffb02e;
+    --danger: #ff6b5e;
+    --ok: #7ddc7d;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 14px/1.5 var(--mono);
+    letter-spacing: -0.01em;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 20px;
+    background: var(--chrome);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: baseline; gap: 9px; margin-right: auto; }
+  .brand b { font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .brand span { font-size: 11px; color: var(--dim); }
+  nav { display: flex; gap: 16px; font-size: 12px; }
+  .health { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; color: var(--dim); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+  .dot.up { background: var(--ok); }
+  .dot.down { background: var(--danger); }
+
+  main { max-width: 960px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  .hero { margin: 24px 0 36px; }
+  .hero h1 { font-size: 24px; margin: 0 0 8px; }
+  .hero p { color: var(--dim); max-width: 60ch; margin: 0; }
+
+  section {
+    margin-top: 34px;
+    background: var(--chrome);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 18px 20px;
+  }
+  section h2 {
+    margin: 0 0 4px;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  section > p { color: var(--dim); font-size: 12.5px; margin: 0 0 14px; }
+
+  iframe.editor {
+    width: 100%;
+    height: 78vh;
+    min-height: 520px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg);
+  }
+
+  form.printfile { display: flex; flex-direction: column; gap: 12px; max-width: 460px; }
+  label.field {
+    display: flex; flex-direction: column; gap: 4px;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim);
+  }
+  select, input[type="number"], input[type="file"] {
+    font: inherit; font-size: 13px; color: var(--ink);
+    background: var(--chrome-2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 10px;
+  }
+  input[type="number"] { width: 80px; }
+  .check {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--ink); cursor: pointer; user-select: none;
+  }
+  .check input { accent-color: var(--accent); width: 16px; height: 16px; }
+  .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+
+  button {
+    font: inherit; color: var(--ink);
+    background: var(--chrome-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 14px; cursor: pointer;
+  }
+  button.print {
+    background: var(--accent); border-color: var(--accent);
+    color: #17120a; font-weight: 600;
+  }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+
+  #pfStatus { font-size: 12.5px; }
+  #pfStatus .work { color: var(--accent); }
+  #pfStatus .good { color: var(--ok); }
+  #pfStatus .bad { color: var(--danger); }
+
+  table.api { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.api th, table.api td {
+    text-align: left; padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table.api th { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+  table.api tr:last-child td { border-bottom: 0; }
+  .method {
+    display: inline-block; min-width: 52px; text-align: center;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em;
+    border-radius: 5px; padding: 2px 6px;
+    background: var(--chrome-2); border: 1px solid var(--line);
+  }
+  .method.get { color: var(--ok); }
+  .method.post { color: var(--accent); }
+  .method.delete { color: var(--danger); }
+  code { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><b>QLApi</b><span>Brother QL label printing</span></div>
+  <nav>
+    <a href="#editor">Editor</a>
+    <a href="#print-file">Print a file</a>
+    <a href="#api">API</a>
+    <a href="/docs">Docs</a>
+  </nav>
+  <div class="health"><i class="dot" id="hdot"></i><span id="htext">checking printer</span></div>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>Print labels from your browser</h1>
+    <p>Design a label in the editor below, or upload an existing image or PDF and
+       send it straight to the printer. Everything on this page talks to the
+       QLApi HTTP API listed at the bottom.</p>
+  </div>
+
+  <section id="editor">
+    <h2>Label editor</h2>
+    <p>Compose a label from text, images, icons and barcodes. Save templates with
+       placeholders, fill them in, and print on any loaded label size.</p>
+    <iframe class="editor" src="/editor" title="Label editor" loading="lazy"></iframe>
+  </section>
+
+  <section id="print-file">
+    <h2>Print an existing file</h2>
+    <p>Already have a label? Upload a PNG, JPG or PDF and print it directly.
+       Turn on rotation to print a landscape image across the tape.</p>
+    <form class="printfile" id="pfForm">
+      <label class="field">File (png, jpg, jpeg, pdf)
+        <input type="file" id="pfFile" accept=".png,.jpg,.jpeg,.pdf" required>
+      </label>
+      <div class="row">
+        <label class="field">Copies
+          <input type="number" id="pfCopies" min="1" max="50" value="1">
+        </label>
+        <label class="check"><input type="checkbox" id="pfRotate"> Rotate 90&deg;</label>
+        <button type="submit" class="print" id="pfBtn">Print</button>
+      </div>
+      <div id="pfStatus" aria-live="polite"></div>
+    </form>
+  </section>
+
+  <section id="api">
+    <h2>What the API offers</h2>
+    <p>Everything the UI does is a plain HTTP call &mdash; use it from scripts,
+       bots or other apps. Interactive documentation lives at <a href="/docs">/docs</a>.</p>
+    <table class="api">
+      <tr><th>Method</th><th>Path</th><th>What it does</th></tr>
+      <tr><td><span class="method get">GET</span></td><td><code>/health</code></td>
+          <td>Reachability status of the configured printer(s).</td></tr>
+      <tr><td><span class="method get">GET</span></td><td><code>/labels</code></td>
+          <td>Label stock supported by the printer: sizes, printable dots, default.</td></tr>
+      <tr><td><span class="method post">POST</span></td><td><code>/job</code></td>
+          <td>Queue a print. Multipart <code>label_file</code> (png/jpg/jpeg/pdf), plus
+              <code>rotate</code> and <code>copies</code> options. Returns a job id.</td></tr>
+      <tr><td><span class="method get">GET</span></td><td><code>/job/{job_id}</code></td>
+          <td>Poll a queued print job until it is done or failed.</td></tr>
+      <tr><td><span class="method get">GET</span></td><td><code>/templates</code></td>
+          <td>List saved label templates.</td></tr>
+      <tr><td><span class="method get">GET</span></td><td><code>/templates/{id}</code></td>
+          <td>Fetch one template, including its canvas definition.</td></tr>
+      <tr><td><span class="method post">POST</span></td><td><code>/templates</code></td>
+          <td>Save a new template (<code>name</code>, <code>label_identifier</code>, <code>canvas</code>).</td></tr>
+      <tr><td><span class="method post">POST</span></td><td><code>/templates/{id}</code></td>
+          <td>Overwrite an existing template.</td></tr>
+      <tr><td><span class="method delete">DELETE</span></td><td><code>/templates/{id}</code></td>
+          <td>Delete a template.</td></tr>
+      <tr><td><span class="method get">GET</span></td><td><code>/editor</code></td>
+          <td>The label editor UI, embedded above.</td></tr>
+    </table>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ------------------------------------------------------------- health
+  async function checkHealth() {
+    var dot = $("hdot"), txt = $("htext");
+    try {
+      var res = await fetch("/health");
+      var list = await res.json();
+      var p = list[0];
+      if (!p) throw new Error("no printer");
+      dot.className = "dot " + (p.available ? "up" : "down");
+      txt.textContent = p.available ? p.model + " ready" : (p.error || "printer unavailable");
+    } catch (err) {
+      dot.className = "dot down";
+      txt.textContent = "printer unreachable";
+    }
+  }
+
+  // -------------------------------------------------------- print a file
+  function pfSay(cls, text) {
+    $("pfStatus").innerHTML = '<span class="' + cls + '">' + text + "</span>";
+  }
+
+  async function detail(res) {
+    try {
+      var body = await res.json();
+      if (body && body.detail) return typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+    } catch (err) { /* non-JSON body */ }
+    return "Server responded " + res.status + ".";
+  }
+
+  $("pfForm").onsubmit = async function (e) {
+    e.preventDefault();
+    var btn = $("pfBtn");
+    var file = $("pfFile").files[0];
+    if (!file) { pfSay("bad", "Pick a file first."); return; }
+    if (!/\.(png|jpe?g|pdf)$/i.test(file.name)) {
+      pfSay("bad", "Only png, jpg, jpeg and pdf files can be printed.");
+      return;
+    }
+
+    var copies = Math.max(1, parseInt($("pfCopies").value, 10) || 1);
+    btn.disabled = true;
+    try {
+      var fd = new FormData();
+      fd.append("label_file", file, file.name);
+      var q = "?rotate=" + ($("pfRotate").checked ? "true" : "false") + "&copies=" + copies;
+      pfSay("work", "Sending to printer&hellip;");
+
+      var res = await fetch("/job" + q, { method: "POST", body: fd });
+      if (!res.ok) { pfSay("bad", await detail(res)); return; }
+      var job = await res.json();
+      pfSay("work", "Queued as job " + job.job_id + "&hellip;");
+
+      // Poll until the background worker reaches a terminal state.
+      for (var i = 0; i < 150; i++) {
+        await new Promise(function (r) { setTimeout(r, 700); });
+        var sres = await fetch("/job/" + encodeURIComponent(job.job_id));
+        if (!sres.ok) { pfSay("bad", await detail(sres)); return; }
+        var s = await sres.json();
+        if (s.status === "done") {
+          pfSay("good", "Printed " + copies + " cop" + (copies === 1 ? "y" : "ies") + ".");
+          return;
+        }
+        if (s.status === "failed") {
+          pfSay("bad", s.error || "The print job failed.");
+          return;
+        }
+      }
+      pfSay("bad", "Still not finished. Job id " + job.job_id + ".");
+    } catch (err) {
+      pfSay("bad", err && err.message ? err.message : "Could not reach the server.");
+    } finally {
+      btn.disabled = false;
+      checkHealth();
+    }
+  };
+
+  checkHealth();
+})();
+</script>
+</body>
+</html>

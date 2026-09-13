@@ -56,7 +56,8 @@ def get_printer_manager(request: Request) -> PrinterManager:
 
 @app.get("/")
 async def root():
-    return {"message": "Hello World"}
+    """Serves the landing page: embedded editor, direct file printing, API overview."""
+    return FileResponse(_STATIC_DIR / "index.html")
 
 
 @app.get("/editor")
