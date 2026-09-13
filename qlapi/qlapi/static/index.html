@@ -142,7 +142,7 @@
 
 <main>
   <section class="view on" id="viewEditor">
-    <iframe src="/editor" title="Label editor"></iframe>
+    <iframe id="editorFrame" src="/editor" title="Label editor"></iframe>
   </section>
 
   <section class="view" id="viewFile">
@@ -175,15 +175,21 @@
   // view and back never reloads it and the label being drawn is kept.
   function show(which) {
     var edit = which === "editor";
-    $("viewEditor").classList.toggle("on", edit);
-    $("viewFile").classList.toggle("on", !edit);
+    $("viewEditor").classList.toggle("on", true);
+    $("viewFile").classList.toggle("on", false);
     $("tabEditor").classList.toggle("on", edit);
     $("tabFile").classList.toggle("on", !edit);
+    var frame = $("editorFrame");
+    try {
+      var target = edit ? "designMode" : "fileMode";
+      var button = frame.contentDocument && frame.contentDocument.getElementById(target);
+      if (button) button.click();
+    } catch (err) {}
   }
   $("tabEditor").onclick = function () { show("editor"); };
   $("tabFile").onclick = function () { show("file"); };
+  $("editorFrame").onload = function () { if (location.hash === "#file") show("file"); };
 
-  // Allow /#file to open straight onto the file-print view.
   if (location.hash === "#file") show("file");
 
   // ------------------------------------------------------------- health
