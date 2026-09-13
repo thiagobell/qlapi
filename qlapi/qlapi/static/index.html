@@ -19,18 +19,21 @@
     --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
   body {
-    margin: 0;
     background: var(--bg);
     color: var(--ink);
     font: 400 14px/1.5 var(--mono);
     letter-spacing: -0.01em;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
   header {
-    position: sticky; top: 0; z-index: 10;
+    flex: none;
     display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
     padding: 12px 20px;
     background: var(--chrome);
@@ -39,44 +42,58 @@
   .brand { display: flex; align-items: baseline; gap: 9px; margin-right: auto; }
   .brand b { font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; }
   .brand span { font-size: 11px; color: var(--dim); }
-  nav { display: flex; gap: 16px; font-size: 12px; }
-  .health { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; color: var(--dim); }
+  nav { display: flex; gap: 6px; font-size: 12px; align-items: center; }
+
+  .tab {
+    font: inherit;
+    font-size: 12px;
+    color: var(--dim);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    padding: 7px 12px;
+    cursor: pointer;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.on {
+    color: var(--accent);
+    border-color: var(--line);
+    background: var(--chrome-2);
+  }
+  nav .docslink { margin-left: 8px; font-size: 12px; }
+
+  .health {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 11px; color: var(--dim);
+    margin-left: auto;
+  }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
   .dot.up { background: var(--ok); }
   .dot.down { background: var(--danger); }
 
-  main { max-width: 960px; margin: 0 auto; padding: 28px 20px 60px; }
+  /* The active view fills everything below the header. */
+  main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .view { flex: 1 1 auto; min-height: 0; display: none; flex-direction: column; }
+  .view.on { display: flex; }
 
-  .hero { margin: 24px 0 36px; }
-  .hero h1 { font-size: 24px; margin: 0 0 8px; }
-  .hero p { color: var(--dim); max-width: 60ch; margin: 0; }
-
-  section {
-    margin-top: 34px;
-    background: var(--chrome);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 18px 18px 20px;
-  }
-  section h2 {
-    margin: 0 0 4px;
-    font-size: 13px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--accent);
-  }
-  section > p { color: var(--dim); font-size: 12.5px; margin: 0 0 14px; }
-
-  iframe.editor {
+  #viewEditor iframe {
+    flex: 1 1 auto;
     width: 100%;
-    height: 78vh;
-    min-height: 520px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
+    border: 0;
     background: var(--bg);
   }
 
-  form.printfile { display: flex; flex-direction: column; gap: 12px; max-width: 460px; }
+  #viewFile { padding: 28px 20px; overflow: auto; }
+  #viewFile h1 { font-size: 18px; margin: 0 0 6px; }
+  #viewFile > p { color: var(--dim); font-size: 12.5px; margin: 0 0 18px; max-width: 60ch; }
+
+  form.printfile {
+    display: flex; flex-direction: column; gap: 12px; max-width: 460px;
+    background: var(--chrome);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+  }
   label.field {
     display: flex; flex-direction: column; gap: 4px;
     font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim);
@@ -109,25 +126,6 @@
   #pfStatus .work { color: var(--accent); }
   #pfStatus .good { color: var(--ok); }
   #pfStatus .bad { color: var(--danger); }
-
-  table.api { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  table.api th, table.api td {
-    text-align: left; padding: 8px 10px;
-    border-bottom: 1px solid var(--line);
-    vertical-align: top;
-  }
-  table.api th { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
-  table.api tr:last-child td { border-bottom: 0; }
-  .method {
-    display: inline-block; min-width: 52px; text-align: center;
-    font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em;
-    border-radius: 5px; padding: 2px 6px;
-    background: var(--chrome-2); border: 1px solid var(--line);
-  }
-  .method.get { color: var(--ok); }
-  .method.post { color: var(--accent); }
-  .method.delete { color: var(--danger); }
-  code { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -135,31 +133,20 @@
 <header>
   <div class="brand"><b>QLApi</b><span>Brother QL label printing</span></div>
   <nav>
-    <a href="#editor">Editor</a>
-    <a href="#print-file">Print a file</a>
-    <a href="#api">API</a>
-    <a href="/docs">Docs</a>
+    <button class="tab on" id="tabEditor">Label editor</button>
+    <button class="tab" id="tabFile">Print a file</button>
+    <a class="docslink" href="/docs">API docs</a>
   </nav>
   <div class="health"><i class="dot" id="hdot"></i><span id="htext">checking printer</span></div>
 </header>
 
 <main>
-  <div class="hero">
-    <h1>Print labels from your browser</h1>
-    <p>Design a label in the editor below, or upload an existing image or PDF and
-       send it straight to the printer. Everything on this page talks to the
-       QLApi HTTP API listed at the bottom.</p>
-  </div>
-
-  <section id="editor">
-    <h2>Label editor</h2>
-    <p>Compose a label from text, images, icons and barcodes. Save templates with
-       placeholders, fill them in, and print on any loaded label size.</p>
-    <iframe class="editor" src="/editor" title="Label editor" loading="lazy"></iframe>
+  <section class="view on" id="viewEditor">
+    <iframe src="/editor" title="Label editor"></iframe>
   </section>
 
-  <section id="print-file">
-    <h2>Print an existing file</h2>
+  <section class="view" id="viewFile">
+    <h1>Print an existing file</h1>
     <p>Already have a label? Upload a PNG, JPG or PDF and print it directly.
        Turn on rotation to print a landscape image across the tape.</p>
     <form class="printfile" id="pfForm">
@@ -176,42 +163,28 @@
       <div id="pfStatus" aria-live="polite"></div>
     </form>
   </section>
-
-  <section id="api">
-    <h2>What the API offers</h2>
-    <p>Everything the UI does is a plain HTTP call &mdash; use it from scripts,
-       bots or other apps. Interactive documentation lives at <a href="/docs">/docs</a>.</p>
-    <table class="api">
-      <tr><th>Method</th><th>Path</th><th>What it does</th></tr>
-      <tr><td><span class="method get">GET</span></td><td><code>/health</code></td>
-          <td>Reachability status of the configured printer(s).</td></tr>
-      <tr><td><span class="method get">GET</span></td><td><code>/labels</code></td>
-          <td>Label stock supported by the printer: sizes, printable dots, default.</td></tr>
-      <tr><td><span class="method post">POST</span></td><td><code>/job</code></td>
-          <td>Queue a print. Multipart <code>label_file</code> (png/jpg/jpeg/pdf), plus
-              <code>rotate</code> and <code>copies</code> options. Returns a job id.</td></tr>
-      <tr><td><span class="method get">GET</span></td><td><code>/job/{job_id}</code></td>
-          <td>Poll a queued print job until it is done or failed.</td></tr>
-      <tr><td><span class="method get">GET</span></td><td><code>/templates</code></td>
-          <td>List saved label templates.</td></tr>
-      <tr><td><span class="method get">GET</span></td><td><code>/templates/{id}</code></td>
-          <td>Fetch one template, including its canvas definition.</td></tr>
-      <tr><td><span class="method post">POST</span></td><td><code>/templates</code></td>
-          <td>Save a new template (<code>name</code>, <code>label_identifier</code>, <code>canvas</code>).</td></tr>
-      <tr><td><span class="method post">POST</span></td><td><code>/templates/{id}</code></td>
-          <td>Overwrite an existing template.</td></tr>
-      <tr><td><span class="method delete">DELETE</span></td><td><code>/templates/{id}</code></td>
-          <td>Delete a template.</td></tr>
-      <tr><td><span class="method get">GET</span></td><td><code>/editor</code></td>
-          <td>The label editor UI, embedded above.</td></tr>
-    </table>
-  </section>
 </main>
 
 <script>
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
+
+  // ------------------------------------------------------------- tabs
+  // The editor iframe stays mounted the whole time, so switching to the file
+  // view and back never reloads it and the label being drawn is kept.
+  function show(which) {
+    var edit = which === "editor";
+    $("viewEditor").classList.toggle("on", edit);
+    $("viewFile").classList.toggle("on", !edit);
+    $("tabEditor").classList.toggle("on", edit);
+    $("tabFile").classList.toggle("on", !edit);
+  }
+  $("tabEditor").onclick = function () { show("editor"); };
+  $("tabFile").onclick = function () { show("file"); };
+
+  // Allow /#file to open straight onto the file-print view.
+  if (location.hash === "#file") show("file");
 
   // ------------------------------------------------------------- health
   async function checkHealth() {
