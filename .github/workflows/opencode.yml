@@ -25,9 +25,27 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install qlapi deps
+        working-directory: qlapi
+        run: uv sync --frozen
+
+      - name: Install Chromium for the Playwright MCP
+        run: npx -y playwright install --with-deps chromium
+
       - name: Run opencode
         uses: anomalyco/opencode/github@latest
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
           model: openrouter/openrouter/auto
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: tmp/screenshots/
+          if-no-files-found: ignore

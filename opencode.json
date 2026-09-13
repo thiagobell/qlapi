@@ -6,5 +6,21 @@
         "openrouter/auto": {}
       }
     }
+  },
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@latest",
+        "--headless",
+        "--browser",
+        "chromium",
+        "--output-dir",
+        "tmp/screenshots"
+      ]
+    }
   }
 }
