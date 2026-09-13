@@ -204,8 +204,23 @@
   }
   .workspace-sidebar button { width: 100%; justify-content: flex-start; text-align: left; }
   .workspace-sidebar .active { color: var(--accent); border-color: var(--accent); }
+  .workspace-sidebar .file-action { display: flex; flex-direction: column; gap: 6px; }
+  .workspace-sidebar .file-action button { width: auto; min-height: 34px; padding: 6px 10px; font-size: 12px; }
   .workspace-sidebar .hint { color: var(--dim); font-size: 11px; line-height: 1.45; }
   .workspace-sidebar hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 5px 0; }
+  .template-list { display: flex; flex-direction: column; gap: 6px; }
+  .template-list .item { padding: 7px 8px; flex-wrap: wrap; }
+  .template-list .item .nm { flex: 1 0 100%; }
+  .template-list .item button { flex: 1; min-height: 30px; padding: 4px 8px; font-size: 11px; }
+  .template-list .item button.danger { flex: 0 0 auto; }
+  .template-save { display: flex; gap: 6px; }
+  .template-save input { min-width: 0; width: 100%; }
+  .template-save button { width: auto; flex: none; }
+  .workspace-sidebar .empty { padding: 3px 0; }
+  .tools .normal-tools, .tools .slot-tools { display: flex; gap: 8px; }
+  .tools.template-mode .normal-tools { display: none; }
+  .tools:not(.template-mode) .slot-tools { display: none; }
+  .workspace-sidebar hr { flex: none; }
   #stage {
     position: relative;
     flex: 1 1 auto;
@@ -600,13 +615,19 @@
     <h2>Workspace</h2>
     <button id="designMode" class="active">Design a label</button>
     <button id="fileMode">Print an existing file</button>
-    <input type="file" id="sourcePick" accept=".png,.jpg,.jpeg,.pdf" hidden>
-    <button id="sourceBtn">Choose file</button>
-    <span class="hint" id="sourceName">No file selected</span>
+    <div class="file-action">
+      <input type="file" id="sourcePick" accept=".png,.jpg,.jpeg,.pdf" hidden>
+      <button id="sourceBtn">Choose file</button>
+      <span class="hint" id="sourceName">No file selected</span>
+    </div>
     <hr>
     <h2>Templates</h2>
-    <button id="tplBtnSide">Browse templates</button>
-    <span class="hint">Design tools are disabled while previewing an uploaded file.</span>
+    <div class="template-list" id="tplList"></div>
+    <div class="template-save">
+      <input type="text" id="tplName" placeholder="template name" autocomplete="off">
+      <button id="tplSave">Save</button>
+    </div>
+    <span class="hint">Load a template to edit its fillable slots.</span>
   </aside>
   <div id="stage">
     <div class="tag" id="tag"></div>
@@ -637,16 +658,18 @@
     <button id="unslotBtn" hidden>Unmark</button>
   </div>
 
-  <div class="tools">
-    <button id="addText">Add text</button>
-    <button id="addImage">Add image</button>
-    <button id="addIcon">Add icon</button>
+  <div class="tools" id="tools">
+    <span class="normal-tools">
+      <button id="addText">Add text</button>
+      <button id="addImage">Add image</button>
+      <button id="addIcon">Add icon</button>
+    </span>
+    <span class="slot-tools">
+      <button id="addTextSlot" title="Add a fillable text placeholder">Text slot</button>
+      <button id="addImageSlot" title="Add a fillable image placeholder">Image slot</button>
+      <button id="addBarcodeSlot" title="Add a fillable barcode placeholder">Barcode slot</button>
+    </span>
     <span class="sep"></span>
-    <button id="addTextSlot" title="Add a fillable text placeholder">Text slot</button>
-    <button id="addImageSlot" title="Add a fillable image placeholder">Image slot</button>
-    <button id="addBarcodeSlot" title="Add a fillable barcode placeholder">Barcode slot</button>
-    <span class="sep"></span>
-    <button id="tplBtn">Templates</button>
     <button id="fillBtn" disabled title="Fill this label's placeholders">Fill</button>
     <button id="fwd" disabled title="Move the selected object one step towards the front">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h13v13H8z" fill="currentColor"/><path d="M3 8h5v8h8v5H3z" fill="currentColor" opacity=".45"/></svg>
@@ -665,19 +688,6 @@
   <div class="sheet-inner">
     <div class="sheet-head"><span>Icons</span><button data-close style="min-height:32px;padding:5px 10px">Close</button></div>
     <div class="grid" id="iconGrid"></div>
-  </div>
-</div>
-
-<div class="sheet" id="tplSheet">
-  <div class="sheet-inner">
-    <div class="sheet-head"><span>Templates</span><button data-close style="min-height:32px;padding:5px 10px">Close</button></div>
-    <div class="list" id="tplList"></div>
-    <div class="form">
-      <label class="field">Save the current label as a new template
-        <input type="text" id="tplName" placeholder="template name" autocomplete="off">
-      </label>
-    </div>
-    <div class="row"><button class="grow" id="tplSave">Save as new template</button></div>
   </div>
 </div>
 
@@ -774,8 +784,13 @@
 
   // ---------------------------------------------------------------- setup
   var $ = function (id) { return document.getElementById(id); };
-  var uploadedFile = null, fileMode = false;
-  var editingControlIds = ["labelSel", "lenInp", "addText", "addImage", "addIcon", "addTextSlot", "addImageSlot", "addBarcodeSlot", "tplBtn", "fillBtn", "fwd", "back", "del"];
+  var uploadedFile = null, fileMode = false, templateMode = false;
+  var editingControlIds = ["lenInp", "addText", "addImage", "addIcon", "addTextSlot", "addImageSlot", "addBarcodeSlot", "fillBtn", "fwd", "back", "del"];
+
+  function setTemplateMode(on) {
+    templateMode = on;
+    $("tools").classList.toggle("template-mode", on);
+  }
 
   function setFileMode(on) {
     fileMode = on;
@@ -787,6 +802,7 @@
     if (on) canvas.discardActiveObject();
     $("rotate").disabled = !canTurn(current);
     if (!on) applyTurn();
+    else fitFilePreview();
   }
 
   function clearFilePreview() {
@@ -839,11 +855,10 @@
     } catch (err) { uploadedFile = null; clearFilePreview(); say("bad", "error", err.message || "Could not preview that file."); }
   }
 
-  $("designMode").onclick = function () { setFileMode(false); };
+  $("designMode").onclick = function () { setTemplateMode(false); setFileMode(false); };
   $("fileMode").onclick = function () { setFileMode(true); };
   $("sourceBtn").onclick = function () { $("sourcePick").click(); };
   $("sourcePick").onchange = function (e) { var f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) previewFile(f); };
-  $("tplBtnSide").onclick = function () { $("tplBtn").click(); };
 
   var tape = $("tape"), tag = $("tag");
   var canvasEl = document.createElement("canvas");
@@ -1336,7 +1351,7 @@
   $("addBarcodeSlot").onclick = function () { addSlot("barcode"); };
 
   // ------------------------------------------------------------- templates
-  var tplSheet = $("tplSheet"), tplList = $("tplList");
+  var tplList = $("tplList");
 
   async function api(url, opts) {
     var res = await fetch(url, opts);
@@ -1396,7 +1411,7 @@
         restyle();
         canvas.requestRenderAll();
         syncFill();
-        tplSheet.classList.remove("on");
+        setTemplateMode(true);
         $("tplName").value = t.name;
         say("good", "loaded", slots().length
           ? 'Loaded "' + t.name + '". Tap Fill to enter the values.'
@@ -1439,7 +1454,7 @@
     }
   }
 
-  $("tplBtn").onclick = function () { tplSheet.classList.add("on"); loadTemplates(); };
+  loadTemplates();
 
   $("tplSave").onclick = async function () {
     var name = ($("tplName").value || "").trim();
@@ -1750,6 +1765,10 @@
     if (!canTurn(spec) && rot.checked) rot.checked = false;
     rot.disabled = !canTurn(spec);
     rot.parentNode.classList.toggle("off", !canTurn(spec));
+    if (fileMode) {
+      fitFilePreview();
+      return;
+    }
     applyTurn();
     applyLabel(spec, parseInt(lenInp.value, 10) || 300);
   }
