@@ -171,15 +171,75 @@
     min-height: 0;
     position: relative;
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
-    padding: 20px calc(16px + var(--safe-r)) 20px calc(16px + var(--safe-l));
+    padding: 0;
+    overflow: hidden;
     background:
       radial-gradient(120% 90% at 50% 0%, #1a1d21 0%, var(--bg) 60%),
       repeating-linear-gradient(90deg, rgba(255,255,255,.022) 0 1px, transparent 1px 34px);
   }
 
-  #stage { position: relative; }
+  .workspace-sidebar {
+    flex: 0 0 230px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 18px 14px;
+    background: var(--chrome);
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+  }
+  .workspace-sidebar h2 {
+    margin: 0 0 4px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .workspace-sidebar button { width: 100%; justify-content: flex-start; text-align: left; }
+  .workspace-sidebar .active { color: var(--accent); border-color: var(--accent); }
+  .workspace-sidebar .hint { color: var(--dim); font-size: 11px; line-height: 1.45; }
+  .workspace-sidebar hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 5px 0; }
+  #stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+  }
+  #stage.file-mode { align-items: flex-start; justify-content: center; padding: 22px; }
+  #stage.file-mode #tape { display: none; }
+  #stage.file-mode .tag { display: none; }
+  #filePreview {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+    width: min(100%, 720px);
+  }
+  #stage.file-mode #filePreview { display: flex; }
+  .file-page {
+    position: relative;
+    flex: none;
+    max-width: 100%;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(0,0,0,.55);
+    transform-origin: center;
+  }
+  .file-page img, .file-page canvas { display: block; max-width: 100%; height: auto; }
+  .file-page::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border: 1px solid rgba(255,176,46,.55);
+    pointer-events: none;
+  }
+  .file-empty { color: var(--dim); padding: 45px 20px; text-align: center; }
 
   .tag {
     /* Grows upward from just above the tape, and is allowed to be wider than
@@ -346,6 +406,7 @@
   .props .sep { width: 1px; align-self: stretch; background: var(--line); flex: none; margin: 2px 3px; }
   /* the bar is shared: the text-only controls fold away for images and icons */
   .props.notext .txt { display: none; }
+  .props.disabled { opacity: .4; pointer-events: none; }
   .props button.slot { border-color: #4a3a1c; color: var(--accent); }
 
   .tools {
@@ -525,8 +586,21 @@
 </header>
 
 <main>
+  <aside class="workspace-sidebar" aria-label="Workspace">
+    <h2>Workspace</h2>
+    <button id="designMode" class="active">Design a label</button>
+    <button id="fileMode">Print an existing file</button>
+    <input type="file" id="sourcePick" accept=".png,.jpg,.jpeg,.pdf" hidden>
+    <button id="sourceBtn">Choose file</button>
+    <span class="hint" id="sourceName">No file selected</span>
+    <hr>
+    <h2>Templates</h2>
+    <button id="tplBtnSide">Browse templates</button>
+    <span class="hint">Design tools are disabled while previewing an uploaded file.</span>
+  </aside>
   <div id="stage">
     <div class="tag" id="tag"></div>
+    <div id="filePreview"><div class="file-empty">Choose a PNG, JPG or PDF to preview it here.</div></div>
     <div class="stagerow">
       <div class="feed" id="feed" aria-label="Paper feed direction">
         <span class="head"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V4 M6 10l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
@@ -643,6 +717,8 @@
 <script src="https://cdn.jsdelivr.net/npm/fabric@6.4.3/dist/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script>
 (function () {
   "use strict";
@@ -676,6 +752,76 @@
 
   // ---------------------------------------------------------------- setup
   var $ = function (id) { return document.getElementById(id); };
+  var uploadedFile = null, fileMode = false;
+  var editingControlIds = ["labelSel", "lenInp", "addText", "addImage", "addIcon", "tplBtn", "fillBtn", "fwd", "back", "del"];
+
+  function setFileMode(on) {
+    fileMode = on;
+    $("stage").classList.toggle("file-mode", on);
+    $("fileMode").classList.toggle("active", on);
+    $("designMode").classList.toggle("active", !on);
+    editingControlIds.forEach(function (id) { var el = $(id); if (el) el.disabled = on; });
+    $("props").classList.toggle("disabled", on);
+    if (on) canvas.discardActiveObject();
+    $("rotate").disabled = !canTurn(current);
+    if (!on) applyTurn();
+  }
+
+  function clearFilePreview() {
+    $("filePreview").innerHTML = '<div class="file-empty">Choose a PNG, JPG or PDF to preview it here.</div>';
+  }
+
+  function fitFilePreview() {
+    var box = $("filePreview");
+    var max = Math.max(180, Math.min(box.clientWidth - 8, 680));
+    Array.prototype.forEach.call(box.children, function (page) {
+      if (!page.classList.contains("file-page")) return;
+      page.style.maxWidth = max + "px";
+      page.style.transform = $("rotate").checked ? "rotate(90deg)" : "none";
+      page.style.margin = $("rotate").checked ? Math.round(Math.abs(page.offsetWidth - page.offsetHeight) / 2) + "px 0" : "0";
+    });
+  }
+
+  function addImagePage(file) {
+    var url = URL.createObjectURL(file), page = document.createElement("div"), img = document.createElement("img");
+    page.className = "file-page";
+    img.onload = function () { URL.revokeObjectURL(url); fitFilePreview(); };
+    img.onerror = function () { URL.revokeObjectURL(url); clearFilePreview(); say("bad", "error", "Could not read that image."); };
+    img.src = url;
+    page.appendChild(img);
+    $("filePreview").appendChild(page);
+  }
+
+  async function addPdfPages(file) {
+    if (!window.pdfjsLib) throw new Error("PDF preview is unavailable.");
+    var data = await file.arrayBuffer();
+    var pdf = await window.pdfjsLib.getDocument({ data: data }).promise;
+    for (var i = 1; i <= pdf.numPages; i++) {
+      var pdfPage = await pdf.getPage(i), viewport = pdfPage.getViewport({ scale: 1.4 });
+      var page = document.createElement("div"), canvasPage = document.createElement("canvas");
+      page.className = "file-page";
+      canvasPage.width = viewport.width; canvasPage.height = viewport.height;
+      page.appendChild(canvasPage); $("filePreview").appendChild(page);
+      await pdfPage.render({ canvasContext: canvasPage.getContext("2d"), viewport: viewport }).promise;
+    }
+    fitFilePreview();
+  }
+
+  async function previewFile(file) {
+    if (!/\.(png|jpe?g|pdf)$/i.test(file.name)) { say("bad", "file", "Only png, jpg, jpeg and pdf files can be previewed."); return; }
+    uploadedFile = file; setFileMode(true); clearFilePreview();
+    $("sourceName").textContent = file.name;
+    try {
+      if (/\.pdf$/i.test(file.name)) await addPdfPages(file); else addImagePage(file);
+      fitFilePreview();
+    } catch (err) { uploadedFile = null; clearFilePreview(); say("bad", "error", err.message || "Could not preview that file."); }
+  }
+
+  $("designMode").onclick = function () { setFileMode(false); };
+  $("fileMode").onclick = function () { setFileMode(true); };
+  $("sourceBtn").onclick = function () { $("sourcePick").click(); };
+  $("sourcePick").onchange = function (e) { var f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) previewFile(f); };
+  $("tplBtnSide").onclick = function () { $("tplBtn").click(); };
 
   var tape = $("tape"), tag = $("tag");
   var canvasEl = document.createElement("canvas");
@@ -1342,17 +1488,18 @@
     setPrinting(true);
     var note = say("work", "", "Preparing image", true);
     try {
-      canvas.discardActiveObject();
-      canvas.renderAll();
-
-      // toCanvasElement(1) reproduces the backing store exactly: 1 canvas
-      // pixel == 1 printer dot. Selection handles are not drawn.
-      var out = canvas.toCanvasElement(1);
-      var blob = await new Promise(function (r) { out.toBlob(r, "image/png"); });
-      if (!blob) throw new Error("The canvas could not be exported.");
-
       var fd = new FormData();
-      fd.append("label_file", blob, "label.png"); // server validates by extension
+      if (fileMode) {
+        if (!uploadedFile) throw new Error("Choose a file to print first.");
+        fd.append("label_file", uploadedFile, uploadedFile.name);
+      } else {
+        canvas.discardActiveObject();
+        canvas.renderAll();
+        var out = canvas.toCanvasElement(1);
+        var blob = await new Promise(function (r) { out.toBlob(r, "image/png"); });
+        if (!blob) throw new Error("The canvas could not be exported.");
+        fd.append("label_file", blob, "label.png");
+      }
       note.remove();
       note = say("work", "", "Sending to printer", true);
 
@@ -1437,7 +1584,7 @@
 
   sel.onchange = refresh;
   lenInp.onchange = refresh;
-  $("rotate").onchange = refresh;
+  $("rotate").onchange = function () { if (fileMode) fitFilePreview(); else refresh(); };
   window.addEventListener("resize", fitToScreen);
   window.addEventListener("orientationchange", function () { setTimeout(fitToScreen, 250); });
 
