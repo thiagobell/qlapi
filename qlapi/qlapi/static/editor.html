@@ -204,20 +204,90 @@
   }
   .workspace-sidebar button { width: 100%; justify-content: flex-start; text-align: left; }
   .workspace-sidebar .active { color: var(--accent); border-color: var(--accent); }
-  .workspace-sidebar .file-action { display: flex; flex-direction: column; gap: 6px; }
-  .workspace-sidebar .file-action button { width: auto; min-height: 34px; padding: 6px 10px; font-size: 12px; }
+  .workspace-sidebar .file-action {
+    display: flex; flex-direction: column; gap: 6px;
+    margin-left: 8px; padding: 8px 0 2px 10px;
+    border-left: 2px solid var(--line);
+  }
+  .workspace-sidebar .file-action button {
+    width: auto; align-self: flex-start; min-height: 30px; padding: 5px 12px;
+    font-size: 12px; background: transparent; border-color: var(--line);
+  }
+  .workspace-sidebar .file-action button:hover:not(:disabled) { background: var(--chrome-2); border-color: #3a4148; }
   .workspace-sidebar .hint { color: var(--dim); font-size: 11px; line-height: 1.45; }
   .workspace-sidebar hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 5px 0; }
-  .template-list { display: flex; flex-direction: column; gap: 6px; }
-  .template-list .item { padding: 7px 8px; flex-wrap: wrap; }
-  .template-list .item .nm { flex: 1 0 100%; }
-  .template-list .item button { flex: 1; min-height: 30px; padding: 4px 8px; font-size: 11px; }
-  .template-list .item button.danger { flex: 0 0 auto; }
-  .template-save { display: flex; gap: 6px; }
-  .template-save input { min-width: 0; width: 100%; }
-  .template-save button { width: auto; flex: none; }
+  /* Templates read as a flat list, the way a file tree does: one slim row
+     each, no card. The row itself is the fill action, so the hover belongs to
+     the row; the two icons sit quietly on the right until you go near them. */
+  .template-list { display: flex; flex-direction: column; gap: 1px; margin: 0 -6px; }
+  .tpl-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 30px;
+    padding: 4px 4px 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .tpl-row:hover { background: var(--chrome-2); }
+  /* The row being edited is the one Save writes to, and its name is the field
+     you rename it in -- readonly the rest of the time, where it has to look
+     like nothing more than the row's text. */
+  .tpl-row.on { background: var(--chrome-2); }
+  .tpl-row .nm {
+    /* zero basis: an <input> brings its own intrinsic width, which would
+       otherwise crowd the label id off the row */
+    flex: 1 1 0;
+    min-width: 0;
+    font: inherit;
+    font-size: 12.5px;
+    color: inherit;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 2px 5px;
+    min-height: 22px;
+    text-overflow: ellipsis;
+  }
+  .tpl-row .nm[readonly] { pointer-events: none; }
+  .tpl-row.on .nm {
+    color: var(--accent);
+    background: var(--bg);
+    border-color: var(--line);
+    cursor: text;
+  }
+  .tpl-row .sub {
+    flex: none;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: #5f666d;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .tpl-row .act {
+    flex: none;
+    width: 24px;
+    min-height: 24px;
+    padding: 0;
+    justify-content: center;
+    background: transparent;
+    border-color: transparent;
+    color: var(--dim);
+    opacity: .5;
+  }
+  .tpl-row:hover .act, .tpl-row .act:focus-visible { opacity: 1; }
+  .tpl-row .act:hover:not(:disabled) { background: #30363d; border-color: transparent; color: var(--ink); }
+  .tpl-row .act.danger:hover:not(:disabled) { color: var(--danger); }
+  .tpl-row .act svg { width: 14px; height: 14px; }
+  /* Edit/Delete and Save/Done are the same two seats on the row: which pair
+     you get depends on whether this is the row being edited. The editing pair
+     stays lit, because it is the thing you came here to press. */
+  .tpl-row .act.on-edit { display: none; }
+  .tpl-row.on .act.off-edit { display: none; }
+  .tpl-row.on .act.on-edit { display: inline-flex; opacity: 1; }
+  .tpl-row.on .act.on-edit.ok:hover:not(:disabled) { color: var(--accent); }
   .workspace-sidebar .empty { padding: 3px 0; }
-  .tools .normal-tools, .tools .slot-tools { display: flex; gap: 8px; }
+  .tools .normal-tools, .tools .slot-tools { display: flex; gap: 8px; align-items: center; }
   .tools.template-mode .normal-tools { display: none; }
   .tools:not(.template-mode) .slot-tools { display: none; }
   .workspace-sidebar hr { flex: none; }
@@ -231,9 +301,24 @@
     justify-content: center;
     overflow: auto;
   }
-  #stage.file-mode { align-items: flex-start; justify-content: center; padding: 22px; }
-  #stage.file-mode #tape { display: none; }
+  #stage.file-mode { align-items: flex-start; justify-content: center; padding: 22px; overflow: hidden; }
+  /* In file mode the tape stops being a tape and becomes a plain anchor box
+     for the two edge measurements, which have to stay put while the pages
+     scroll -- so the scrolling moves into #filePreview. */
+  #stage.file-mode #tape {
+    position: absolute;
+    inset: 0;
+    width: auto !important;
+    height: auto !important;
+    filter: none;
+    pointer-events: none;
+  }
+  #stage.file-mode #tape::before,
+  #stage.file-mode #tape::after,
+  #stage.file-mode #tape .canvas-container { display: none; }
   #stage.file-mode .tag { display: none; }
+  /* An uploaded file has no feed rail to speak of -- only its own two edges. */
+  #stage.file-mode .feed { display: none; }
   #filePreview {
     display: none;
     flex-direction: column;
@@ -241,7 +326,7 @@
     gap: 18px;
     width: min(100%, 720px);
   }
-  #stage.file-mode #filePreview { display: flex; }
+  #stage.file-mode #filePreview { display: flex; max-height: 100%; overflow-y: auto; }
   .file-page {
     position: relative;
     flex: none;
@@ -276,6 +361,51 @@
     color: var(--dim);
   }
   .tag b { color: var(--accent); font-weight: 500; }
+
+  /* ---------- edge measurements ----------
+     Two bits of text sitting just off the tape, one per axis. They always go
+     on the edges the feed rail does not occupy, so nothing overlaps: portrait
+     puts the rail on the left, landscape puts it on top. */
+  .dim {
+    position: absolute;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  /* portrait: width across the top, length up the far (right) edge */
+  #dimW { left: 50%; bottom: 100%; margin-bottom: 13px; transform: translateX(-50%); }
+  #dimL {
+    left: 100%; top: 50%; margin-left: 13px;
+    writing-mode: vertical-rl;
+    transform: translateY(-50%) rotate(180deg);
+  }
+  /* landscape: the rail is on top, so width goes up the left edge and length
+     runs along the bottom */
+  #tape.turned #dimW {
+    left: auto; right: 100%; bottom: auto; top: 50%; margin: 0 13px 0 0;
+    writing-mode: vertical-rl;
+    transform: translateY(-50%) rotate(180deg);
+  }
+  #tape.turned #dimL {
+    left: 50%; right: auto; top: 100%; margin: 7px 0 0 0;
+    writing-mode: horizontal-tb;
+    transform: translateX(-50%);
+  }
+  /* file mode: the anchor box is the whole stage, and pages are always shown
+     upright, so the portrait arrangement applies whatever .turned says. */
+  #stage.file-mode #dimW {
+    left: 50%; right: auto; top: 2px; bottom: auto; margin: 0;
+    writing-mode: horizontal-tb;
+    transform: translateX(-50%);
+  }
+  #stage.file-mode #dimL {
+    left: auto; right: 4px; top: 50%; bottom: auto; margin: 0;
+    writing-mode: vertical-rl;
+    transform: translateY(-50%) rotate(180deg);
+  }
 
   .stagerow { display: flex; align-items: stretch; gap: 12px; }
 
@@ -446,6 +576,49 @@
   .tools .grow { flex: 1 1 auto; min-width: 0; }
   .tools .danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
 
+  /* ---------- fill panel ----------
+     Docked beside the stage rather than laid over it: filling a template is a
+     side-by-side job, you type and watch the label change. Collapsing leaves
+     a sliver behind and keeps every entered value, because the form is only
+     hidden, never rebuilt. */
+  .fill-panel {
+    flex: 0 0 300px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--chrome);
+    border-left: 1px solid var(--line);
+  }
+  .fill-panel.collapsed { flex-basis: 32px; }
+  .fill-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 8px 11px 13px;
+    border-bottom: 1px solid var(--line);
+  }
+  .fill-head h2 {
+    flex: 1 1 auto;
+    margin: 0;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .fill-panel.collapsed .fill-head { padding: 11px 3px; border-bottom: 0; }
+  .fill-panel.collapsed .fill-head h2 { display: none; }
+  .fill-panel.collapsed .fill-body { display: none; }
+  #fillToggle { flex: none; width: 24px; min-height: 24px; padding: 0; font-size: 14px; }
+  .fill-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 13px calc(13px + var(--safe-r)) 16px 13px;
+  }
+  .fill-body .form { max-height: none; overflow: visible; }
+
   /* ---------- icon sheet ---------- */
 
   .sheet {
@@ -503,21 +676,6 @@
   .row { display: flex; gap: 8px; margin-top: 12px; }
   .row .grow { flex: 1 1 auto; }
 
-  .list { display: flex; flex-direction: column; gap: 6px; max-height: 44vh; overflow-y: auto; margin-bottom: 12px; }
-  .item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--chrome-2);
-    border: 1px solid var(--line);
-    border-radius: 9px;
-    padding: 8px 10px;
-  }
-  .item .nm { flex: 1 1 auto; min-width: 0; }
-  .item .nm b { font-weight: 500; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .item .sub { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
-  .item button { min-height: 30px; padding: 4px 9px; font-size: 12px; }
-  .item .danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
   .empty { color: var(--dim); font-size: 12px; padding: 12px 2px; line-height: 1.5; }
 
   /* ---------- status ---------- */
@@ -622,12 +780,9 @@
     </div>
     <hr>
     <h2>Templates</h2>
+    <button id="tplNew">+ New template</button>
     <div class="template-list" id="tplList"></div>
-    <div class="template-save">
-      <input type="text" id="tplName" placeholder="template name" autocomplete="off">
-      <button id="tplSave">Save</button>
-    </div>
-    <span class="hint">Load a template to edit its fillable slots.</span>
+    <span class="hint">Click a template to fill it in. Edit changes its layout.</span>
   </aside>
   <div id="stage">
     <div class="tag" id="tag"></div>
@@ -639,9 +794,25 @@
         <i class="rail"></i>
         <span class="foot">out last</span>
       </div>
-      <div id="tape"></div>
+      <div id="tape">
+        <span class="dim" id="dimW" aria-label="Tape width"></span>
+        <span class="dim" id="dimL" aria-label="Label length"></span>
+      </div>
     </div>
   </div>
+  <aside class="fill-panel" id="fillPanel" hidden aria-label="Fill placeholders">
+    <div class="fill-head">
+      <h2>Fill</h2>
+      <button id="fillToggle" title="Hide the fill panel" aria-label="Hide the fill panel">&rsaquo;</button>
+    </div>
+    <div class="fill-body">
+      <div class="form" id="fillForm"></div>
+      <div class="row">
+        <button class="grow" id="fillPreview">Fill only</button>
+        <button class="print grow" id="fillPrint">Fill &amp; print</button>
+      </div>
+    </div>
+  </aside>
 </main>
 
 <footer>
@@ -732,17 +903,6 @@
   </div>
 </div>
 
-<div class="sheet" id="fillSheet">
-  <div class="sheet-inner">
-    <div class="sheet-head"><span>Fill placeholders</span><button data-close style="min-height:32px;padding:5px 10px">Close</button></div>
-    <div class="form" id="fillForm"></div>
-    <div class="row">
-      <button class="grow" id="fillPreview">Fill only</button>
-      <button class="print grow" id="fillPrint">Fill &amp; print</button>
-    </div>
-  </div>
-</div>
-
 <div id="status"></div>
 <input type="file" id="filePick" accept="image/*" hidden>
 
@@ -784,12 +944,53 @@
 
   // ---------------------------------------------------------------- setup
   var $ = function (id) { return document.getElementById(id); };
-  var uploadedFile = null, fileMode = false, templateMode = false;
+  var uploadedFile = null, fileMode = false, templateMode = false, fillMode = false;
+  var editingTemplateId = null;
   var editingControlIds = ["lenInp", "addText", "addImage", "addIcon", "addTextSlot", "addImageSlot", "addBarcodeSlot", "fillBtn", "fwd", "back", "del"];
 
   function setTemplateMode(on) {
     templateMode = on;
     $("tools").classList.toggle("template-mode", on);
+    // Leaving template editing drops the "Save overwrites this one" link.
+    if (!on) setEditing(null);
+    syncUI();
+  }
+
+  // Fill mode shows the template as it will print: the artwork is fixed, only
+  // the placeholder values change. Nothing on the canvas is grabbable.
+  function lockCanvas(on) {
+    canvas.selection = !on;
+    canvas.getObjects().forEach(function (o) { o.selectable = !on; o.evented = !on; });
+    if (on) canvas.discardActiveObject();
+    canvas.requestRenderAll();
+  }
+
+  // Collapsing is only a view change -- the form stays in the DOM, so every
+  // value typed so far is still there when it slides back out.
+  function setFillPanelOpen(open) {
+    $("fillPanel").classList.toggle("collapsed", !open);
+    var btn = $("fillToggle");
+    btn.innerHTML = open ? "&rsaquo;" : "&lsaquo;";
+    btn.title = open ? "Hide the fill panel" : "Show the fill panel";
+    btn.setAttribute("aria-label", btn.title);
+    fitToScreen();
+  }
+
+  function setFillMode(on) {
+    fillMode = on;
+    var panel = $("fillPanel");
+    panel.hidden = !on;
+    if (on) {
+      setTemplateMode(false);
+      setFillPanelOpen(true);
+      buildFill();
+    } else {
+      fillFiles = {};
+      fillForm.innerHTML = "";
+    }
+    lockCanvas(on);
+    fitToScreen();
+    syncUI();
   }
 
   function setFileMode(on) {
@@ -801,12 +1002,22 @@
     $("props").classList.toggle("disabled", on);
     if (on) canvas.discardActiveObject();
     $("rotate").disabled = !canTurn(current);
-    if (!on) applyTurn();
+    // refresh() rather than applyTurn(): coming back from a file also has to
+    // put the canvas's own measurements back on the edge labels.
+    if (!on) refresh();
     else fitFilePreview();
   }
 
   function clearFilePreview() {
     $("filePreview").innerHTML = '<div class="file-empty">Choose a PNG, JPG or PDF to preview it here.</div>';
+  }
+
+  // The "choose a file" line is a placeholder for the preview, so the first
+  // page that arrives takes its place.
+  function addPage(page) {
+    var empty = $("filePreview").querySelector(".file-empty");
+    if (empty) empty.remove();
+    $("filePreview").appendChild(page);
   }
 
   function fitFilePreview() {
@@ -818,7 +1029,39 @@
       page.style.transform = $("rotate").checked ? "rotate(90deg)" : "none";
       page.style.margin = $("rotate").checked ? Math.round(Math.abs(page.offsetWidth - page.offsetHeight) / 2) + "px 0" : "0";
     });
+    fileDims();
   }
+
+  // The page nearest the middle of the preview viewport is the one being
+  // looked at, so it is the one the length measurement describes.
+  function inViewPage() {
+    var box = $("filePreview");
+    var mid = box.getBoundingClientRect().top + box.clientHeight / 2;
+    var best = null, bestD = Infinity;
+    Array.prototype.forEach.call(box.querySelectorAll(".file-page"), function (p) {
+      var r = p.getBoundingClientRect();
+      var d = Math.abs((r.top + r.bottom) / 2 - mid);
+      if (d < bestD) { bestD = d; best = p; }
+    });
+    return best;
+  }
+
+  // An uploaded page prints at the tape's fixed width, so its own aspect
+  // ratio decides how much tape it eats.
+  function fileDims() {
+    if (!fileMode) return;
+    var spec = chosen();
+    if (!spec) return;
+    var across = Math.round(spec.dots_printable[0] / dotsPerMm(spec));
+    $("dimW").textContent = across + " mm";
+    var page = inViewPage();
+    var art = page && page.querySelector("img, canvas");
+    var nw = art && (art.naturalWidth || art.width);
+    var nh = art && (art.naturalHeight || art.height);
+    $("dimL").textContent = nw && nh ? Math.round(across * nh / nw) + " mm" : "";
+  }
+
+  $("filePreview").addEventListener("scroll", fileDims);
 
   function addImagePage(file) {
     var url = URL.createObjectURL(file), page = document.createElement("div"), img = document.createElement("img");
@@ -827,7 +1070,7 @@
     img.onerror = function () { URL.revokeObjectURL(url); clearFilePreview(); say("bad", "error", "Could not read that image."); };
     img.src = url;
     page.appendChild(img);
-    $("filePreview").appendChild(page);
+    addPage(page);
   }
 
   async function addPdfPages(file) {
@@ -839,7 +1082,7 @@
       var page = document.createElement("div"), canvasPage = document.createElement("canvas");
       page.className = "file-page";
       canvasPage.width = viewport.width; canvasPage.height = viewport.height;
-      page.appendChild(canvasPage); $("filePreview").appendChild(page);
+      page.appendChild(canvasPage); addPage(page);
       await pdfPage.render({ canvasContext: canvasPage.getContext("2d"), viewport: viewport }).promise;
     }
     fitFilePreview();
@@ -855,8 +1098,8 @@
     } catch (err) { uploadedFile = null; clearFilePreview(); say("bad", "error", err.message || "Could not preview that file."); }
   }
 
-  $("designMode").onclick = function () { setTemplateMode(false); setFileMode(false); };
-  $("fileMode").onclick = function () { setFileMode(true); };
+  $("designMode").onclick = function () { setFillMode(false); setTemplateMode(false); setFileMode(false); };
+  $("fileMode").onclick = function () { setFillMode(false); setTemplateMode(false); setFileMode(true); };
   $("sourceBtn").onclick = function () { $("sourcePick").click(); };
   $("sourcePick").onchange = function (e) { var f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) previewFile(f); };
 
@@ -922,11 +1165,16 @@
     // The canvas dimensions already encode the orientation, so the display
     // box is just the canvas scaled down uniformly. No swapping, no rotation.
     var w = canvas.getWidth(), h = canvas.getHeight();
-    var main = document.querySelector("main");
-    var railW = turned() ? 0 : 46;   // rail sits beside the tape only in portrait
-    var railH = turned() ? 32 : 0;   // ...and above it in landscape
-    var availW = main.clientWidth - 40 - railW;
-    var availH = main.clientHeight - 62 - railH;
+    // The stage, not <main>: the sidebar and the fill panel are siblings, so
+    // opening the panel really does squeeze the label.
+    var box = $("stage");
+    // Portrait keeps the rail on the left and the length label on the right;
+    // landscape puts the rail and the length label above and below instead,
+    // with the width label off to the left.
+    var gutterW = turned() ? 30 : 76;
+    var gutterH = turned() ? 56 : 0;
+    var availW = box.clientWidth - 40 - gutterW;
+    var availH = box.clientHeight - 62 - gutterH;
     var k = Math.min(availW / w, availH / h, 1);
     var dw = Math.round(w * k), dh = Math.round(h * k);
     canvas.setDimensions({ width: dw + "px", height: dh + "px" }, { cssOnly: true });
@@ -952,6 +1200,8 @@
     tag.innerHTML = spec.name + " &middot; " + (turned() ? "landscape" : "portrait") +
       " &middot; <b>" + w + " &times; " + h + " px</b> &middot; " +
       mmAcross + " mm tape, " + mmLen + " mm long";
+    $("dimW").textContent = mmAcross + " mm";
+    $("dimL").textContent = mmLen + " mm";
 
     fitToScreen();
     canvas.requestRenderAll();
@@ -1073,7 +1323,7 @@
   // Enter in a sheet's text fields submits the sheet through its primary
   // button -- name the slot, hit Enter, done. Textareas keep Enter for a new
   // line and need Ctrl/Cmd+Enter instead.
-  var SHEET_PRIMARY = { slotSheet: "slotApply", tplSheet: "tplSave", fillSheet: "fillPreview" };
+  var SHEET_PRIMARY = { slotSheet: "slotApply" };
 
   // Every sheet closes the same two ways: its Close button, or the backdrop.
   // The backdrop only counts when the whole gesture (down AND up) lands on
@@ -1163,9 +1413,11 @@
     var single = o && o.type !== "activeselection";
     $("propsCap").textContent = !o ? "Nothing selected"
       : o.placeholder ? "Slot" : (t ? "Text" : "Object");
-    $("slotBtn").hidden = !single;
+    // Placeholders only exist inside templates, so they can only be made or
+    // unmade while a template is being edited.
+    $("slotBtn").hidden = !single || !templateMode;
     $("slotBtn").textContent = single && o.placeholder ? "Edit placeholder" : "Make placeholder";
-    $("unslotBtn").hidden = !(single && o.placeholder);
+    $("unslotBtn").hidden = !(single && o.placeholder && templateMode);
     if (!t) return;
     fsize.value = Math.round(t.fontSize);
     boldBtn.classList.toggle("sel", t.fontWeight === "bold");
@@ -1351,7 +1603,7 @@
   $("addBarcodeSlot").onclick = function () { addSlot("barcode"); };
 
   // ------------------------------------------------------------- templates
-  var tplList = $("tplList");
+  var tplList = $("tplList"), templateNames = [];
 
   async function api(url, opts) {
     var res = await fetch(url, opts);
@@ -1389,51 +1641,105 @@
     });
   }
 
+  // Which template Save writes to. Only that row's name is editable, so the
+  // name never exists in two places at once.
+  function setEditing(id) {
+    editingTemplateId = id || null;
+    Array.prototype.forEach.call(tplList.children, function (el) {
+      var on = !!editingTemplateId && el.dataset.id === editingTemplateId;
+      el.classList.toggle("on", on);
+      var nm = el.querySelector(".nm");
+      if (!nm) return;
+      nm.readOnly = !on;
+      nm.title = on ? "Rename this template" : "";
+    });
+  }
+
+  // The name field of the row being edited -- the one place the pending name
+  // lives, so Save reads it straight off the row.
+  function editingNameEl() {
+    var row = editingTemplateId &&
+      tplList.querySelector('.tpl-row[data-id="' + editingTemplateId + '"]');
+    return row ? row.querySelector(".nm") : null;
+  }
+
+  async function loadTemplate(t) {
+    var full = await api("/templates/" + encodeURIComponent(t.id));
+    await canvas.loadFromJSON(full.canvas);
+    restyle();
+    canvas.requestRenderAll();
+    syncFill();
+  }
+
   function tplRow(t) {
     var el = document.createElement("div");
-    el.className = "item";
-    el.innerHTML = '<div class="nm"><b>' + esc(t.name) + '</b>' +
-      '<span class="sub">label ' + esc(t.label_identifier) + '</span></div>';
+    el.className = "tpl-row";
+    el.dataset.id = t.id;
+    el.innerHTML = '<input class="nm" type="text" readonly autocomplete="off" spellcheck="false"' +
+      ' aria-label="Template name" value="' + esc(t.name) + '">' +
+      '<span class="sub">' + esc(t.label_identifier) + '</span>';
+    el.title = 'Fill in "' + t.name + '"';
 
-    function mk(text, cls, fn) {
+    // Renaming happens in place. Enter and blur both commit, and both only
+    // commit locally -- Save is what puts the name on the server.
+    var nm = el.querySelector(".nm");
+    nm.onclick = function (e) { e.stopPropagation(); };
+    nm.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); nm.blur(); } };
+    nm.onchange = function () {
+      t.name = nm.value.trim() || t.name;
+      nm.value = t.name;
+      el.title = 'Fill in "' + t.name + '"';
+    };
+
+    // The row itself is the fill action -- the buttons on it are not, so they
+    // stop the click before it reaches the row.
+    el.onclick = async function () {
+      try {
+        await loadTemplate(t);
+        setFileMode(false);
+        setFillMode(true);
+        say("good", "fill", slots().length
+          ? 'Filling "' + t.name + '".'
+          : '"' + t.name + '" has no placeholders to fill.');
+      } catch (err) { say("bad", "error", err.message, false); }
+    };
+
+    function mk(label, path, cls, fn) {
       var b = document.createElement("button");
-      b.textContent = text;
-      if (cls) b.className = cls;
-      b.onclick = fn;
+      b.className = "act" + (cls ? " " + cls : "");
+      b.title = label;
+      b.setAttribute("aria-label", label);
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + path +
+        '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      b.onclick = function (e) { e.stopPropagation(); return fn(e); };
       el.appendChild(b);
       return b;
     }
 
-    mk("Load", "", async function () {
+    mk("Edit layout", "M4 20h4L19.5 8.5l-4-4L4 16z M14.5 5.5l4 4", "off-edit", async function () {
       try {
-        var full = await api("/templates/" + encodeURIComponent(t.id));
-        await canvas.loadFromJSON(full.canvas);
-        restyle();
-        canvas.requestRenderAll();
-        syncFill();
+        await loadTemplate(t);
+        setFillMode(false);
+        setFileMode(false);
         setTemplateMode(true);
-        $("tplName").value = t.name;
-        say("good", "loaded", slots().length
-          ? 'Loaded "' + t.name + '". Tap Fill to enter the values.'
-          : 'Loaded "' + t.name + '".');
+        setEditing(t.id);
+        say("good", "editing", 'Editing "' + t.name + '". Save writes back to it.');
       } catch (err) { say("bad", "error", err.message, false); }
     });
 
-    mk("Save", "", async function () {
-      if (!confirm('Overwrite "' + t.name + '" with what is on the canvas now?')) return;
-      try {
-        await api("/templates/" + encodeURIComponent(t.id), body(t.name));
-        say("good", "saved", 'Updated "' + t.name + '".');
-      } catch (err) { say("bad", "error", err.message, false); }
-    });
-
-    mk("Delete", "danger", async function () {
+    mk("Delete", "M4 7h16 M9.5 7V4h5v3 M6.5 7l.9 13h9.2l.9-13 M10 11v5 M14 11v5", "danger off-edit", async function () {
       if (!confirm('Delete "' + t.name + '"? This cannot be undone.')) return;
       try {
         await api("/templates/" + encodeURIComponent(t.id), { method: "DELETE" });
+        if (editingTemplateId === t.id) setEditing(null);
         loadTemplates();
       } catch (err) { say("bad", "error", err.message, false); }
     });
+
+    // Both of these only ever show on the row being edited, which is the row
+    // Save writes to -- so they can just act on their own template.
+    mk("Save", "M5 12.5 10 17.5 19 7", "ok on-edit", function () { saveTemplate(t.id, nm); });
+    mk("Done", "M6 6 18 18 M18 6 6 18", "on-edit", function () { setTemplateMode(false); });
 
     return el;
   }
@@ -1443,11 +1749,13 @@
     try {
       var list = await api("/templates");
       tplList.innerHTML = "";
+      templateNames = list.map(function (t) { return t.name; });
       if (!list.length) {
-        tplList.innerHTML = '<div class="empty">No templates yet. Lay out a label, mark the parts that change as placeholders, then save it here.</div>';
+        tplList.innerHTML = '<div class="empty">No templates yet. + New template starts one, then mark the parts that change as placeholders.</div>';
         return;
       }
       list.forEach(function (t) { tplList.appendChild(tplRow(t)); });
+      setEditing(editingTemplateId);
     } catch (err) {
       tplList.innerHTML = '<div class="empty">Could not load templates.</div>';
       say("bad", "error", err.message, false);
@@ -1456,22 +1764,62 @@
 
   loadTemplates();
 
-  $("tplSave").onclick = async function () {
-    var name = ($("tplName").value || "").trim();
-    if (!name) { say("bad", "name", "Name the template first."); return; }
+  // Nobody wants to name a thing before they have made it, so a new template
+  // names itself and can be renamed on its row at any point.
+  function newName() {
+    var taken = {};
+    templateNames.forEach(function (n) { taken[n] = true; });
+    if (!taken["New template"]) return "New template";
+    var i = 2;
+    while (taken["New template " + i]) i++;
+    return "New template " + i;
+  }
+
+  // Creating is a real save, not a promise of one: the template exists on the
+  // server and in the list before the first edit, so there is nothing to lose
+  // by walking away and nothing to type before starting.
+  $("tplNew").onclick = async function () {
+    var name = newName();
     try {
-      await api("/templates", body(name));
-      say("good", "saved", 'Saved "' + name + '".');
-      loadTemplates();
+      var made = await api("/templates", body(name));
+      setFillMode(false);
+      setFileMode(false);
+      setTemplateMode(true);
+      setEditing(made.id);
+      await loadTemplates();
+      // The name is a stand-in, so hand the caret over with it selected --
+      // typing replaces it, ignoring it costs nothing.
+      var nm = editingNameEl();
+      if (nm) { nm.focus(); nm.select(); }
+      say("good", "new", 'Started "' + name + '". Rename it on its row; Save writes back to it.');
     } catch (err) { say("bad", "error", err.message, false); }
   };
 
+  // Save is the only thing that touches the server: the canvas as it stands
+  // plus whatever the row's name field says.
+  async function saveTemplate(id, nm) {
+    var name = nm.value.trim();
+    if (!name) { say("bad", "name", "Give the template a name on its row first."); nm.focus(); return; }
+    try {
+      await api("/templates/" + encodeURIComponent(id), body(name));
+      say("good", "saved", 'Saved "' + name + '".');
+      // Save commits and leaves template edit mode -- the row reverts to
+      // readonly and the canvas returns to Design mode. Press Edit to tweak.
+      setTemplateMode(false);
+      loadTemplates();
+    } catch (err) { say("bad", "error", err.message, false); }
+  }
+
   // --------------------------------------------------------- instantiation
-  var fillSheet = $("fillSheet"), fillForm = $("fillForm"), fillFiles = {};
+  var fillForm = $("fillForm"), fillFiles = {};
 
   function buildFill() {
     fillForm.innerHTML = "";
     fillFiles = {};
+    if (!slots().length) {
+      fillForm.innerHTML = '<div class="hint">This template has no placeholders. Use Edit to add some.</div>';
+      return;
+    }
     slots().forEach(function (o) {
       var w = document.createElement("label");
       w.className = "field";
@@ -1498,7 +1846,18 @@
     });
   }
 
-  $("fillBtn").onclick = function () { buildFill(); fillSheet.classList.add("on"); };
+  // Fill from the tools bar: start filling what is on the canvas, or just
+  // bring the panel back if it was slid away.
+  $("fillBtn").onclick = function () {
+    if (fillMode) setFillPanelOpen(true);
+    else setFillMode(true);
+  };
+
+  // Collapsing is only a view change -- the form stays in the DOM, so every
+  // value typed so far is still there when it slides back out.
+  $("fillToggle").onclick = function () {
+    setFillPanelOpen($("fillPanel").classList.contains("collapsed"));
+  };
 
   // Rasterise through a canvas instead of handing Fabric the blob-backed
   // element: Fabric serialises an image's src as-is, and a blob URL dies with
@@ -1634,13 +1993,15 @@
   }
 
   async function fill(thenPrint) {
-    fillSheet.classList.remove("on");
     try {
       await applyFill();
     } catch (err) {
       say("bad", "error", err.message, false);
       return;
     }
+    // swap() puts fresh objects on the canvas, and fresh objects are
+    // grabbable -- the lock has to go back on over them.
+    if (fillMode) lockCanvas(true);
     if (thenPrint) print();
   }
 
